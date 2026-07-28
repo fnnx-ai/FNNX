@@ -59,9 +59,46 @@ jobs:
         run: |
           pytest tests ${{ matrix.pytest-args }}
 
+  # The ahead-of-time C compiler (`fnnx.extras.compilers.c`). It needs the `compiler`
+  # extra and a system C compiler, which the ubuntu image ships, so it gets its own leg
+  # rather than a matrix entry: the lean legs exclude it through the existing
+  # `--ignore-glob='*test_extra_*'`, and the full legs skip it cleanly when the extra or
+  # a C compiler is absent. `onnx` is pinned to one exact release instead of taken from
+  # the extra's supported range, because that release defines the schema set and node
+  # corpus the conformance ledger and pass-list ratchet are keyed to. `scikit-learn` and
+  # `skl2onnx` are what the ONNX-ML tests convert their models with, where the node corpus
+  # is too thin to cover an op; those tests skip cleanly without them.
+  compiler-test:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'release' &&
+       startsWith(github.ref, 'refs/tags/') &&
+       contains(github.ref, 'py_v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: '**/pyproject.toml'
+
+      - name: Install dependencies
+        run: |
+          pip install -e "src/python[core,test-essential,compiler]" \
+            "onnx==1.22.*" pytest-xdist scikit-learn skl2onnx
+
+      - name: Run compiler tests
+        working-directory: src/python
+        run: |
+          pytest tests/test_extra_compiler_*.py -n auto
+
   deploy:
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [test, compiler-test]
     environment: pypi
     permissions:
       id-token: write

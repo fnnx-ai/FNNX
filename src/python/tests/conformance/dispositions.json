@@ -1,0 +1,744 @@
+{
+  "ai.onnx": {
+    "Abs": {
+      "disposition": "native-kernel"
+    },
+    "Acos": {
+      "disposition": "native-kernel"
+    },
+    "Acosh": {
+      "disposition": "native-kernel"
+    },
+    "Add": {
+      "disposition": "native-kernel"
+    },
+    "AffineGrid": {
+      "disposition": "native-kernel"
+    },
+    "And": {
+      "disposition": "native-kernel"
+    },
+    "ArgMax": {
+      "disposition": "native-kernel"
+    },
+    "ArgMin": {
+      "disposition": "native-kernel"
+    },
+    "Asin": {
+      "disposition": "native-kernel"
+    },
+    "Asinh": {
+      "disposition": "native-kernel"
+    },
+    "Atan": {
+      "disposition": "native-kernel"
+    },
+    "Atanh": {
+      "disposition": "native-kernel"
+    },
+    "Attention": {
+      "disposition": "native-kernel"
+    },
+    "AveragePool": {
+      "disposition": "native-kernel"
+    },
+    "BatchNormalization": {
+      "disposition": "native-kernel"
+    },
+    "Bernoulli": {
+      "disposition": "unsupported",
+      "reason": "random-op",
+      "note": "Draws from a Bernoulli distribution, so its result is not a function of its inputs; folding one would bake a single draw into the artifact and compiling one would need a generator the artifact does not carry."
+    },
+    "BitCast": {
+      "disposition": "native-kernel"
+    },
+    "BitShift": {
+      "disposition": "native-kernel"
+    },
+    "BitwiseAnd": {
+      "disposition": "native-kernel"
+    },
+    "BitwiseNot": {
+      "disposition": "native-kernel"
+    },
+    "BitwiseOr": {
+      "disposition": "native-kernel"
+    },
+    "BitwiseXor": {
+      "disposition": "native-kernel"
+    },
+    "BlackmanWindow": {
+      "disposition": "folding-or-graph-pass",
+      "note": "A window is the `size` operand and nothing else, so the folding pass resolves every node whose `size` the graph fixes into an initializer; a `size` that is only known at run time makes the window's own extent data-dependent."
+    },
+    "Cast": {
+      "disposition": "native-kernel"
+    },
+    "CastLike": {
+      "disposition": "function-expansion"
+    },
+    "CausalConvWithState": {
+      "disposition": "function-expansion"
+    },
+    "Ceil": {
+      "disposition": "native-kernel"
+    },
+    "Celu": {
+      "disposition": "native-kernel"
+    },
+    "CenterCropPad": {
+      "disposition": "function-expansion"
+    },
+    "Clip": {
+      "disposition": "native-kernel"
+    },
+    "Col2Im": {
+      "disposition": "native-kernel"
+    },
+    "Compress": {
+      "disposition": "unsupported",
+      "reason": "data-dependent-shape",
+      "note": "Keeps the elements a run-time condition selects, so how many elements its result holds is a function of input values rather than of input shapes."
+    },
+    "Concat": {
+      "disposition": "native-kernel"
+    },
+    "ConcatFromSequence": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Reads a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "Constant": {
+      "disposition": "folding-or-graph-pass",
+      "note": "Carries its value in an attribute, which the folding pass turns into an initializer before dispatch is reached."
+    },
+    "ConstantOfShape": {
+      "disposition": "folding-or-graph-pass",
+      "note": "Reads the extent of its result out of its operand, so a node the graph fixes that operand for folds into an initializer and one that does not has a data-dependent shape."
+    },
+    "Conv": {
+      "disposition": "native-kernel"
+    },
+    "ConvInteger": {
+      "disposition": "native-kernel"
+    },
+    "ConvTranspose": {
+      "disposition": "native-kernel"
+    },
+    "Cos": {
+      "disposition": "native-kernel"
+    },
+    "Cosh": {
+      "disposition": "native-kernel"
+    },
+    "CumProd": {
+      "disposition": "native-kernel"
+    },
+    "CumSum": {
+      "disposition": "native-kernel"
+    },
+    "DFT": {
+      "disposition": "native-kernel"
+    },
+    "DeformConv": {
+      "disposition": "native-kernel"
+    },
+    "DepthToSpace": {
+      "disposition": "native-kernel"
+    },
+    "DequantizeLinear": {
+      "disposition": "native-kernel"
+    },
+    "Det": {
+      "disposition": "native-kernel"
+    },
+    "Div": {
+      "disposition": "native-kernel"
+    },
+    "Dropout": {
+      "disposition": "native-kernel"
+    },
+    "DynamicQuantizeLinear": {
+      "disposition": "function-expansion"
+    },
+    "Einsum": {
+      "disposition": "native-kernel"
+    },
+    "Elu": {
+      "disposition": "native-kernel"
+    },
+    "Equal": {
+      "disposition": "native-kernel"
+    },
+    "Erf": {
+      "disposition": "native-kernel"
+    },
+    "Exp": {
+      "disposition": "native-kernel"
+    },
+    "Expand": {
+      "disposition": "native-kernel"
+    },
+    "EyeLike": {
+      "disposition": "native-kernel"
+    },
+    "Flatten": {
+      "disposition": "native-kernel"
+    },
+    "Floor": {
+      "disposition": "native-kernel"
+    },
+    "GRU": {
+      "disposition": "native-kernel"
+    },
+    "Gather": {
+      "disposition": "native-kernel"
+    },
+    "GatherElements": {
+      "disposition": "native-kernel"
+    },
+    "GatherND": {
+      "disposition": "native-kernel"
+    },
+    "Gelu": {
+      "disposition": "native-kernel"
+    },
+    "Gemm": {
+      "disposition": "native-kernel"
+    },
+    "GlobalAveragePool": {
+      "disposition": "native-kernel"
+    },
+    "GlobalLpPool": {
+      "disposition": "native-kernel"
+    },
+    "GlobalMaxPool": {
+      "disposition": "native-kernel"
+    },
+    "Greater": {
+      "disposition": "native-kernel"
+    },
+    "GreaterOrEqual": {
+      "disposition": "native-kernel"
+    },
+    "GridSample": {
+      "disposition": "native-kernel"
+    },
+    "GroupNormalization": {
+      "disposition": "native-kernel"
+    },
+    "HammingWindow": {
+      "disposition": "folding-or-graph-pass",
+      "note": "As `BlackmanWindow`: the whole window follows from the `size` operand the folding pass resolves."
+    },
+    "HannWindow": {
+      "disposition": "folding-or-graph-pass",
+      "note": "As `BlackmanWindow`: the whole window follows from the `size` operand the folding pass resolves."
+    },
+    "HardSigmoid": {
+      "disposition": "native-kernel"
+    },
+    "HardSwish": {
+      "disposition": "function-expansion"
+    },
+    "Hardmax": {
+      "disposition": "native-kernel"
+    },
+    "Identity": {
+      "disposition": "native-kernel"
+    },
+    "If": {
+      "disposition": "unsupported",
+      "reason": "control-flow",
+      "note": "Control flow the compiler serves only where constant folding resolves it away; a branch that survives folding is one whose condition is a run-time value, and the two branches need not agree on the shapes they produce."
+    },
+    "ImageDecoder": {
+      "disposition": "unsupported",
+      "reason": "external-codec",
+      "note": "Decodes an encoded image, which needs an image codec; the generated artifact depends on libm at most, and the extent of the decoded image is a function of the bytes it is handed."
+    },
+    "InstanceNormalization": {
+      "disposition": "native-kernel"
+    },
+    "IsInf": {
+      "disposition": "native-kernel"
+    },
+    "IsNaN": {
+      "disposition": "native-kernel"
+    },
+    "LRN": {
+      "disposition": "native-kernel"
+    },
+    "LSTM": {
+      "disposition": "native-kernel"
+    },
+    "LayerNormalization": {
+      "disposition": "native-kernel"
+    },
+    "LeakyRelu": {
+      "disposition": "native-kernel"
+    },
+    "Less": {
+      "disposition": "native-kernel"
+    },
+    "LessOrEqual": {
+      "disposition": "native-kernel"
+    },
+    "LinearAttention": {
+      "disposition": "native-kernel"
+    },
+    "Log": {
+      "disposition": "native-kernel"
+    },
+    "LogSoftmax": {
+      "disposition": "native-kernel"
+    },
+    "Loop": {
+      "disposition": "unsupported",
+      "reason": "control-flow",
+      "note": "Control flow the compiler serves only where constant folding resolves it away; a loop that survives folding has a trip count no static buffer can be sized for."
+    },
+    "LpNormalization": {
+      "disposition": "native-kernel"
+    },
+    "LpPool": {
+      "disposition": "native-kernel"
+    },
+    "MatMul": {
+      "disposition": "native-kernel"
+    },
+    "MatMulInteger": {
+      "disposition": "native-kernel"
+    },
+    "Max": {
+      "disposition": "native-kernel"
+    },
+    "MaxPool": {
+      "disposition": "native-kernel"
+    },
+    "MaxRoiPool": {
+      "disposition": "native-kernel"
+    },
+    "MaxUnpool": {
+      "disposition": "native-kernel"
+    },
+    "Mean": {
+      "disposition": "native-kernel"
+    },
+    "MeanVarianceNormalization": {
+      "disposition": "native-kernel"
+    },
+    "MelWeightMatrix": {
+      "disposition": "folding-or-graph-pass",
+      "note": "Both extents of the matrix come from operands, so the folding pass resolves the nodes whose operands the graph fixes and the rest have a data-dependent shape."
+    },
+    "Min": {
+      "disposition": "native-kernel"
+    },
+    "Mish": {
+      "disposition": "function-expansion"
+    },
+    "Mod": {
+      "disposition": "native-kernel"
+    },
+    "Mul": {
+      "disposition": "native-kernel"
+    },
+    "Multinomial": {
+      "disposition": "unsupported",
+      "reason": "random-op",
+      "note": "Draws a categorical sample per row, so its result is not a function of its inputs."
+    },
+    "Neg": {
+      "disposition": "native-kernel"
+    },
+    "NegativeLogLikelihoodLoss": {
+      "disposition": "function-expansion"
+    },
+    "NonMaxSuppression": {
+      "disposition": "unsupported",
+      "reason": "data-dependent-shape",
+      "note": "Returns the boxes that survive suppression, so the extent of its result is a function of input values."
+    },
+    "NonZero": {
+      "disposition": "unsupported",
+      "reason": "data-dependent-shape",
+      "note": "Reports the coordinates of the non-zero elements, so the extent of its result is a function of input values."
+    },
+    "Not": {
+      "disposition": "native-kernel"
+    },
+    "OneHot": {
+      "disposition": "native-kernel"
+    },
+    "Optional": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Produces an optional value, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "OptionalGetElement": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Unwraps an optional or a sequence, neither of which the compiler holds; the pass-through of a plain tensor that ONNX also allows at opset 18 is the degenerate case of an op whose purpose the compiler does not serve, and it has no kernel of its own."
+    },
+    "OptionalHasElement": {
+      "disposition": "folding-or-graph-pass",
+      "note": "Whether an optional value is present is a compile-time property here: the node ONNX writes with no operand at all folds to `false`, and an operand of optional type is refused by the type check as non-tensor I/O."
+    },
+    "Or": {
+      "disposition": "native-kernel"
+    },
+    "PRelu": {
+      "disposition": "native-kernel"
+    },
+    "Pad": {
+      "disposition": "native-kernel"
+    },
+    "Pow": {
+      "disposition": "native-kernel"
+    },
+    "QLinearConv": {
+      "disposition": "native-kernel"
+    },
+    "QLinearMatMul": {
+      "disposition": "native-kernel"
+    },
+    "QuantizeLinear": {
+      "disposition": "native-kernel"
+    },
+    "RMSNormalization": {
+      "disposition": "native-kernel"
+    },
+    "RNN": {
+      "disposition": "native-kernel"
+    },
+    "RandomNormal": {
+      "disposition": "unsupported",
+      "reason": "random-op",
+      "note": "Draws from a normal distribution, so its result is not a function of its inputs."
+    },
+    "RandomNormalLike": {
+      "disposition": "unsupported",
+      "reason": "random-op",
+      "note": "Draws from a normal distribution, so its result is not a function of its inputs."
+    },
+    "RandomUniform": {
+      "disposition": "unsupported",
+      "reason": "random-op",
+      "note": "Draws from a uniform distribution, so its result is not a function of its inputs."
+    },
+    "RandomUniformLike": {
+      "disposition": "unsupported",
+      "reason": "random-op",
+      "note": "Draws from a uniform distribution, so its result is not a function of its inputs."
+    },
+    "Range": {
+      "disposition": "folding-or-graph-pass",
+      "note": "Reads its result, extent and values alike, out of three operands, so a node the graph fixes them for folds into an initializer. Below opset 27 the folding pass declines -- ONNX revised the op there, and the reference evaluator it folds through cannot be vouched for at the older revision -- and such a node is refused rather than served with semantics nothing can confirm."
+    },
+    "Reciprocal": {
+      "disposition": "native-kernel"
+    },
+    "ReduceL1": {
+      "disposition": "native-kernel"
+    },
+    "ReduceL2": {
+      "disposition": "native-kernel"
+    },
+    "ReduceLogSum": {
+      "disposition": "native-kernel"
+    },
+    "ReduceLogSumExp": {
+      "disposition": "native-kernel"
+    },
+    "ReduceMax": {
+      "disposition": "native-kernel"
+    },
+    "ReduceMean": {
+      "disposition": "native-kernel"
+    },
+    "ReduceMin": {
+      "disposition": "native-kernel"
+    },
+    "ReduceProd": {
+      "disposition": "native-kernel"
+    },
+    "ReduceSum": {
+      "disposition": "native-kernel"
+    },
+    "ReduceSumSquare": {
+      "disposition": "native-kernel"
+    },
+    "RegexFullMatch": {
+      "disposition": "unsupported",
+      "reason": "runtime-strings",
+      "note": "Matches a run-time string tensor against a pattern; the compiler holds strings only as the compile-time constants ONNX-ML attribute tables carry."
+    },
+    "Relu": {
+      "disposition": "native-kernel"
+    },
+    "Reshape": {
+      "disposition": "native-kernel"
+    },
+    "Resize": {
+      "disposition": "native-kernel"
+    },
+    "ReverseSequence": {
+      "disposition": "native-kernel"
+    },
+    "RoiAlign": {
+      "disposition": "native-kernel"
+    },
+    "RotaryEmbedding": {
+      "disposition": "native-kernel"
+    },
+    "Round": {
+      "disposition": "native-kernel"
+    },
+    "STFT": {
+      "disposition": "native-kernel"
+    },
+    "Scan": {
+      "disposition": "unsupported",
+      "reason": "control-flow",
+      "note": "Control flow the compiler serves only where constant folding resolves it away; a scan that survives folding carries state across a run-time number of iterations."
+    },
+    "Scatter": {
+      "disposition": "native-kernel"
+    },
+    "ScatterElements": {
+      "disposition": "native-kernel"
+    },
+    "ScatterND": {
+      "disposition": "native-kernel"
+    },
+    "Selu": {
+      "disposition": "native-kernel"
+    },
+    "SequenceAt": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Reads a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "SequenceConstruct": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Produces a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "SequenceEmpty": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Produces a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "SequenceErase": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Produces a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "SequenceInsert": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Produces a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "SequenceLength": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Reads a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "SequenceMap": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Maps a subgraph over a sequence: its operands are sequences, and the body runs a run-time number of times."
+    },
+    "Shape": {
+      "disposition": "folding-or-graph-pass",
+      "note": "A function of its operand's shape alone, which the folding pass resolves from a static shape without needing the operand's values."
+    },
+    "Shrink": {
+      "disposition": "native-kernel"
+    },
+    "Sigmoid": {
+      "disposition": "native-kernel"
+    },
+    "Sign": {
+      "disposition": "native-kernel"
+    },
+    "Sin": {
+      "disposition": "native-kernel"
+    },
+    "Sinh": {
+      "disposition": "native-kernel"
+    },
+    "Size": {
+      "disposition": "folding-or-graph-pass",
+      "note": "As `Shape`: resolved by the folding pass from the operand's static shape."
+    },
+    "Slice": {
+      "disposition": "native-kernel"
+    },
+    "Softmax": {
+      "disposition": "native-kernel"
+    },
+    "SoftmaxCrossEntropyLoss": {
+      "disposition": "native-kernel"
+    },
+    "Softplus": {
+      "disposition": "native-kernel"
+    },
+    "Softsign": {
+      "disposition": "native-kernel"
+    },
+    "SpaceToDepth": {
+      "disposition": "native-kernel"
+    },
+    "Split": {
+      "disposition": "native-kernel"
+    },
+    "SplitToSequence": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Produces a sequence, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "Sqrt": {
+      "disposition": "native-kernel"
+    },
+    "Squeeze": {
+      "disposition": "native-kernel"
+    },
+    "StringConcat": {
+      "disposition": "unsupported",
+      "reason": "runtime-strings",
+      "note": "Concatenates run-time string tensors, whose elements have no fixed width to hold a buffer of."
+    },
+    "StringNormalizer": {
+      "disposition": "unsupported",
+      "reason": "runtime-strings",
+      "note": "Case-folds and filters a run-time string tensor, and drops the elements it filters out, which also makes the extent of its result a function of its values."
+    },
+    "StringSplit": {
+      "disposition": "unsupported",
+      "reason": "runtime-strings",
+      "note": "Splits a run-time string tensor, whose elements have no fixed width to hold a buffer of."
+    },
+    "Sub": {
+      "disposition": "native-kernel"
+    },
+    "Sum": {
+      "disposition": "native-kernel"
+    },
+    "Swish": {
+      "disposition": "function-expansion"
+    },
+    "Tan": {
+      "disposition": "native-kernel"
+    },
+    "Tanh": {
+      "disposition": "native-kernel"
+    },
+    "TensorScatter": {
+      "disposition": "native-kernel"
+    },
+    "TfIdfVectorizer": {
+      "disposition": "native-kernel"
+    },
+    "ThresholdedRelu": {
+      "disposition": "native-kernel"
+    },
+    "Tile": {
+      "disposition": "native-kernel"
+    },
+    "TopK": {
+      "disposition": "native-kernel"
+    },
+    "Transpose": {
+      "disposition": "native-kernel"
+    },
+    "Trilu": {
+      "disposition": "native-kernel"
+    },
+    "Unique": {
+      "disposition": "unsupported",
+      "reason": "data-dependent-shape",
+      "note": "Returns the distinct elements, so the extent of its result is a function of input values."
+    },
+    "Unsqueeze": {
+      "disposition": "native-kernel"
+    },
+    "Upsample": {
+      "disposition": "native-kernel"
+    },
+    "Where": {
+      "disposition": "native-kernel"
+    },
+    "Xor": {
+      "disposition": "native-kernel"
+    }
+  },
+  "ai.onnx.ml": {
+    "ArrayFeatureExtractor": {
+      "disposition": "native-kernel"
+    },
+    "Binarizer": {
+      "disposition": "native-kernel"
+    },
+    "CastMap": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Reads a map, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "CategoryMapper": {
+      "disposition": "unsupported",
+      "reason": "runtime-strings",
+      "note": "Maps integer categories to string ones and back, so one side of it is a run-time string tensor whichever direction a node runs in."
+    },
+    "DictVectorizer": {
+      "disposition": "unsupported",
+      "reason": "non-tensor-io",
+      "note": "Reads a map, which is not a tensor and has no buffer the entrypoint contract can hand a caller."
+    },
+    "FeatureVectorizer": {
+      "disposition": "native-kernel"
+    },
+    "Imputer": {
+      "disposition": "native-kernel"
+    },
+    "LabelEncoder": {
+      "disposition": "native-kernel"
+    },
+    "LinearClassifier": {
+      "disposition": "native-kernel"
+    },
+    "LinearRegressor": {
+      "disposition": "native-kernel"
+    },
+    "Normalizer": {
+      "disposition": "native-kernel"
+    },
+    "OneHotEncoder": {
+      "disposition": "native-kernel"
+    },
+    "SVMClassifier": {
+      "disposition": "native-kernel"
+    },
+    "SVMRegressor": {
+      "disposition": "native-kernel"
+    },
+    "Scaler": {
+      "disposition": "native-kernel"
+    },
+    "TreeEnsemble": {
+      "disposition": "native-kernel"
+    },
+    "TreeEnsembleClassifier": {
+      "disposition": "native-kernel"
+    },
+    "TreeEnsembleRegressor": {
+      "disposition": "native-kernel"
+    },
+    "ZipMap": {
+      "disposition": "folding-or-graph-pass",
+      "note": "Removed by the ZipMap graph pass, which promotes the probability tensor it reads to the graph output in its place and publishes its class labels as header metadata."
+    }
+  }
+}

@@ -17,6 +17,9 @@ classifiers = [
 core = ["numpy>=1.0.0,<3.0.0", "onnxruntime>=1.0.0,<2.0.0"]
 extras = ["pydantic>=2.0.0,<3.0.0", "pyyaml>=5.1"]
 mlflow = ["mlflow>=3.4"]
+# Ahead-of-time compiler to C (fnnx.extras.compilers.c); the core runtime never
+# depends on onnx. The installed version bounds the opsets that can be compiled.
+compiler = ["onnx>=1.16,<2.0"]
 # Essential test deps: only the pure FNNX core (format/runtime/validators),
 # no mlflow converter and no ML frameworks. Drives the 3.10 / 3.14 CI legs,
 # which skip the extra suite (the `test_extra_*` files); see the test workflow.
