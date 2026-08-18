@@ -1,0 +1,18 @@
+{
+  "documentation": [
+    "Per-op tolerance overrides for the ONNX backend conformance suite.",
+    "The defaults are ONNX's own (rtol 1e-3, atol 1e-7, or whatever a test's data.json",
+    "states); an entry here loosens them for every corpus test containing that op.",
+    "An override must carry a written numerical justification -- libm accuracy,",
+    "summation order -- and must stay within MAX_TOLERANCE_FACTOR of the ONNX default.",
+    "Anything that needs more than that is a wrong kernel, not a tolerance problem.",
+    "Format: \"<OpType>\": {\"rtol\": <float>, \"atol\": <float>, \"justification\": \"...\"}."
+  ],
+  "overrides": {
+    "DFT": {
+      "rtol": 0.001,
+      "atol": 1e-06,
+      "justification": "The expected values come from numpy's FFT run at the tensor's own precision -- a single-precision butterfly for a float32 signal -- so a bin whose exact value cancels to 0 is stored as ~1 ULP of the largest term instead. test_dft_inverse and test_dft_inverse_opset19 are that case: an all-real ramp up to 90 whose Nyquist bin cancels exactly, stored as 1.907e-07 where the kernel, summing in double, leaves 3e-15. That is the oracle's noise floor, not the kernel's error: 1.906e-07 remains after the corpus rtol, so atol is loosened to ten times the ONNX default -- a tenth of the bound -- which clears it with margin and still catches a wrong bin."
+    }
+  }
+}
