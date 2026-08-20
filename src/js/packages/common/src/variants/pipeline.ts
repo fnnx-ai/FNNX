@@ -2,8 +2,7 @@ import { BaseVariant } from './base';
 import { DagComponent, dagCompute } from './common/dag';
 import { OpIO, TarFileContent, DeviceMap, OpInstanceConfig } from '../interfaces';
 import Registry from '../registry';
-import { DtypesManager, NDContainer } from '../ndarray';
-import { NDArray } from '../ndarray';
+import { DtypesManager } from '../ndarray';
 import { BaseOp } from '../ops/base';
 
 interface PipelineNode {

@@ -17,7 +17,8 @@ const testHTML = `
     {
       "imports": {
         "@fnnx-ai/common": "/dist/common/index.js",
-        "@fnnx-ai/web": "/dist/web/index.js"
+        "@fnnx-ai/web": "/dist/web/index.js",
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.mjs"
       }
     }
     </script>
@@ -59,7 +60,7 @@ test.describe('Compute Tests', () => {
       const match = url.pathname.match(/\/dist\/(common|web)\/(.+)$/);
       
       if (!match) {
-        const simplePath = url.pathname.match(/\/dist\/([^\/]+)$/);
+        const simplePath = url.pathname.match(/\/dist\/([^/]+)$/);
         if (simplePath) {
           const fileName = simplePath[1];
           const candidates = [path.join(__dirname, '../../dist', fileName)];

@@ -50,7 +50,7 @@ export async function dagCompute<T>(
 
         const componentInputs = component.inputs.map(key => state.get(key));
 
-        let passthroughCopy = { ...componentsPassthrough };
+        const passthroughCopy = { ...componentsPassthrough };
         if ('dynamic_attributes' in passthroughCopy) {
             passthroughCopy.dynamic_attributes = {
                 ...passthroughCopy.dynamic_attributes,

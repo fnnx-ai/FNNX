@@ -1,53 +1,41 @@
 import { describe, it, expect } from "vitest";
-import { applyPatches } from "@fnnx-ai/common";
+import { applyPatches } from "../src/index";
 
 describe("applyPatches", () => {
     describe("add operation", () => {
         it("should add a new top-level key", () => {
             const doc = { a: 1 };
-            const result = applyPatches(doc, [
-                [{ op: "add", path: "/b", value: 2 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "add", path: "/b", value: 2 }]]);
             expect(result).toEqual({ a: 1, b: 2 });
         });
 
         it("should add a nested key", () => {
             const doc = { a: { b: 1 } };
-            const result = applyPatches(doc, [
-                [{ op: "add", path: "/a/c", value: 2 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "add", path: "/a/c", value: 2 }]]);
             expect(result).toEqual({ a: { b: 1, c: 2 } });
         });
 
         it("should overwrite an existing key via add", () => {
             const doc = { a: 1 };
-            const result = applyPatches(doc, [
-                [{ op: "add", path: "/a", value: 99 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "add", path: "/a", value: 99 }]]);
             expect(result).toEqual({ a: 99 });
         });
 
         it("should append to array with '-'", () => {
             const doc = { items: [1, 2] };
-            const result = applyPatches(doc, [
-                [{ op: "add", path: "/items/-", value: 3 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "add", path: "/items/-", value: 3 }]]);
             expect(result).toEqual({ items: [1, 2, 3] });
         });
 
         it("should insert into array at index", () => {
             const doc = { items: ["a", "c"] };
-            const result = applyPatches(doc, [
-                [{ op: "add", path: "/items/1", value: "b" }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "add", path: "/items/1", value: "b" }]]);
             expect(result).toEqual({ items: ["a", "b", "c"] });
         });
 
         it("should insert at beginning of array", () => {
             const doc = { items: ["b", "c"] };
-            const result = applyPatches(doc, [
-                [{ op: "add", path: "/items/0", value: "a" }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "add", path: "/items/0", value: "a" }]]);
             expect(result).toEqual({ items: ["a", "b", "c"] });
         });
 
@@ -71,35 +59,27 @@ describe("applyPatches", () => {
 
         it("should replace a nested value", () => {
             const doc = { a: { b: { c: 1 } } };
-            const result = applyPatches(doc, [
-                [{ op: "replace", path: "/a/b/c", value: 42 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "replace", path: "/a/b/c", value: 42 }]]);
             expect(result).toEqual({ a: { b: { c: 42 } } });
         });
 
         it("should replace an array element", () => {
             const doc = { items: ["a", "b", "c"] };
-            const result = applyPatches(doc, [
-                [{ op: "replace", path: "/items/1", value: "B" }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "replace", path: "/items/1", value: "B" }]]);
             expect(result).toEqual({ items: ["a", "B", "c"] });
         });
 
         it("should throw when replacing non-existent key", () => {
             const doc = { a: 1 };
             expect(() =>
-                applyPatches(doc, [
-                    [{ op: "replace", path: "/nonexistent", value: 2 }],
-                ])
+                applyPatches(doc, [[{ op: "replace", path: "/nonexistent", value: 2 }]])
             ).toThrow("non-existent");
         });
 
         it("should throw when replacing out-of-bounds array index", () => {
             const doc = { items: [1, 2] };
             expect(() =>
-                applyPatches(doc, [
-                    [{ op: "replace", path: "/items/5", value: 99 }],
-                ])
+                applyPatches(doc, [[{ op: "replace", path: "/items/5", value: 99 }]])
             ).toThrow();
         });
     });
@@ -138,25 +118,19 @@ describe("applyPatches", () => {
     describe("RFC 6901 pointer escaping", () => {
         it("should handle ~1 escape for /", () => {
             const doc = { "a/b": 1 };
-            const result = applyPatches(doc, [
-                [{ op: "replace", path: "/a~1b", value: 2 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "replace", path: "/a~1b", value: 2 }]]);
             expect(result).toEqual({ "a/b": 2 });
         });
 
         it("should handle ~0 escape for ~", () => {
             const doc = { "a~b": 1 };
-            const result = applyPatches(doc, [
-                [{ op: "replace", path: "/a~0b", value: 2 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "replace", path: "/a~0b", value: 2 }]]);
             expect(result).toEqual({ "a~b": 2 });
         });
 
         it("should handle combined escapes", () => {
             const doc = { "a~/b": 1 };
-            const result = applyPatches(doc, [
-                [{ op: "replace", path: "/a~0~1b", value: 2 }],
-            ]);
+            const result = applyPatches(doc, [[{ op: "replace", path: "/a~0~1b", value: 2 }]]);
             expect(result).toEqual({ "a~/b": 2 });
         });
     });
@@ -164,65 +138,51 @@ describe("applyPatches", () => {
     describe("error cases", () => {
         it("should throw for unsupported operations", () => {
             const doc = { a: 1 };
-            expect(() =>
-                applyPatches(doc, [
-                    [{ op: "remove", path: "/a" }],
-                ])
-            ).toThrow("Unsupported JSON Patch op");
+            expect(() => applyPatches(doc, [[{ op: "remove", path: "/a" }]])).toThrow(
+                "Unsupported JSON Patch op"
+            );
         });
 
         it("should throw for empty path", () => {
             const doc = { a: 1 };
-            expect(() =>
-                applyPatches(doc, [
-                    [{ op: "add", path: "", value: 2 }],
-                ])
-            ).toThrow("Empty JSON Pointer path");
+            expect(() => applyPatches(doc, [[{ op: "add", path: "", value: 2 }]])).toThrow(
+                "Empty JSON Pointer path"
+            );
         });
 
         it("should throw for relative path", () => {
             const doc = { a: 1 };
-            expect(() =>
-                applyPatches(doc, [
-                    [{ op: "add", path: "a", value: 2 }],
-                ])
-            ).toThrow("Only absolute JSON Pointer paths");
+            expect(() => applyPatches(doc, [[{ op: "add", path: "a", value: 2 }]])).toThrow(
+                "Only absolute JSON Pointer paths"
+            );
         });
 
         it("should throw for missing path segment during traversal", () => {
             const doc = { a: {} };
-            expect(() =>
-                applyPatches(doc, [
-                    [{ op: "add", path: "/a/b/c", value: 1 }],
-                ])
-            ).toThrow("not found while traversing");
+            expect(() => applyPatches(doc, [[{ op: "add", path: "/a/b/c", value: 1 }]])).toThrow(
+                "not found while traversing"
+            );
         });
 
         it("should throw for non-integer array index", () => {
             const doc = { items: [1, 2] };
             expect(() =>
-                applyPatches(doc, [
-                    [{ op: "replace", path: "/items/abc", value: 99 }],
-                ])
+                applyPatches(doc, [[{ op: "replace", path: "/items/abc", value: 99 }]])
             ).toThrow("Array index must be an integer");
         });
 
         it("should throw for missing op field", () => {
             const doc = { a: 1 };
-            expect(() =>
-                applyPatches(doc, [
-                    [{ path: "/a", value: 2 } as any],
-                ])
-            ).toThrow("Invalid JSON Patch operation");
+            expect(() => applyPatches(doc, [[{ path: "/a", value: 2 } as any]])).toThrow(
+                "Invalid JSON Patch operation"
+            );
         });
 
         it("should throw for missing path field", () => {
             const doc = { a: 1 };
-            expect(() =>
-                applyPatches(doc, [
-                    [{ op: "add", value: 2 } as any],
-                ])
-            ).toThrow("Invalid JSON Patch operation");
+            expect(() => applyPatches(doc, [[{ op: "add", value: 2 } as any]])).toThrow(
+                "Invalid JSON Patch operation"
+            );
         });
     });
 
@@ -246,9 +206,7 @@ describe("applyPatches", () => {
                 producer_name: "test",
                 producer_version: "1.0.0",
                 producer_tags: ["tag1"],
-                inputs: [
-                    { name: "x", content_type: "NDJSON", dtype: "Array[float32]", shape: [] },
-                ],
+                inputs: [{ name: "x", content_type: "NDJSON", dtype: "Array[float32]", shape: [] }],
                 outputs: [
                     { name: "y", content_type: "NDJSON", dtype: "Array[float32]", shape: [] },
                 ],
@@ -273,9 +231,7 @@ describe("applyPatches", () => {
         it("should replace an input spec in manifest", () => {
             const manifest = {
                 variant: "pipeline",
-                inputs: [
-                    { name: "x", content_type: "NDJSON", dtype: "Array[float32]", shape: [] },
-                ],
+                inputs: [{ name: "x", content_type: "NDJSON", dtype: "Array[float32]", shape: [] }],
                 outputs: [],
             };
 

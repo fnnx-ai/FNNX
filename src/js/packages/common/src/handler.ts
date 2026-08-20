@@ -1,6 +1,6 @@
 
 import { BaseVariant, ConcreteVariant } from './variants/base';
-import { BaseOp, ConcreteOp } from './ops/base';
+import { ConcreteOp } from './ops/base';
 import Registry from './registry';
 import { NDArray, ArrayDType, DtypesManager, NDContainer } from './ndarray';
 import { Manifest, OpInstanceConfig, PipelineVariant, DeviceMap, JSONI, NDJSON, TarFileContent } from './interfaces';
@@ -95,7 +95,7 @@ export class LocalHandler {
                 return ArrayDType.Int64;
             case 'string':
                 return ArrayDType.String;
-            case 'bool': ``
+            case 'bool':
                 return ArrayDType.Bool;
             default:
                 throw new Error(`Unsupported Array dtype: ${dtypeStr}`);

@@ -30,7 +30,7 @@ export class ONNXOpV1 extends BaseOp {
 
     }
 
-    async warmup(...args: any[]): Promise<this> {
+    async warmup(..._args: any[]): Promise<this> {
         if (!this.modelFile.content) {
             throw new Error('Model file not found');
         }
@@ -41,7 +41,7 @@ export class ONNXOpV1 extends BaseOp {
         return this;
     }
 
-    async compute(inputs: any, dynamicAttributes: any) {
+    async compute(inputs: any, _dynamicAttributes: any) {
         if (!this.inferenceSession) {
             throw new Error('Model not loaded');
         }

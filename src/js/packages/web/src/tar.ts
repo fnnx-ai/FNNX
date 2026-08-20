@@ -101,14 +101,14 @@ export class TarExtractor {
 
             const originalOffset = this.offset;
             const name = this.readString(100);
-            const mode = this.readOctal(8);
-            const uid = this.readOctal(8);
-            const gid = this.readOctal(8);
+            this.readOctal(8);
+            this.readOctal(8);
+            this.readOctal(8);
             const size = this.readOctal(12);
-            const mtime = this.readOctal(12);
+            this.readOctal(12);
             const checksum = this.readOctal(8);
             const type = this.readString(1);
-            const linkname = this.readString(100);
+            this.readString(100);
 
             const prefix = this.readAsciiAt(originalOffset + 345, 155);
             const typeflag = this.view.getUint8(originalOffset + 156);

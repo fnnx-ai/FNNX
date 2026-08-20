@@ -1,7 +1,7 @@
 
 import Registry from '../registry';
-import { BaseOp, ConcreteOp } from '../ops/base';
-import { DeviceConfig, DeviceMap, OpIO, TarFileContent, OpInstanceConfig } from '../interfaces';
+import { BaseOp } from '../ops/base';
+import { DeviceMap, OpIO, TarFileContent, OpInstanceConfig } from '../interfaces';
 import { DtypesManager } from '../ndarray';
 
 

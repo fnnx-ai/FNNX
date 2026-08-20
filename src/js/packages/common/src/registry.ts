@@ -1,4 +1,4 @@
-import { BaseOp, ConcreteOp } from './ops/base';
+import { ConcreteOp } from './ops/base';
 
 export default class Registry {
     private ops: Record<string, ConcreteOp>;
@@ -11,4 +11,3 @@ export default class Registry {
         return this.ops[name];
     }
 }
-

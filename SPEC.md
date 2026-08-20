@@ -219,11 +219,11 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
 - [x] Add ruff and mypy gates to the Python package
   - [x] Configs in `src/python/pyproject.toml`, excluding `fnnx/extras/compilers/` and compiler/mlflow test files
   - [x] Fix all findings in scope; wire both tools into CI
-- [ ] Set up JS lint, format, and test tooling
-  - [ ] ESLint flat config and Prettier at the workspace root; working `lint`/`format` scripts in every package
-  - [ ] Vitest config and test scaffolding for `@fnnx-ai/common`; root `pnpm test` includes it
-  - [ ] Move the duplicated jsonpatcher tests into `common`
-  - [ ] CI runs lint, all unit tests, and the web Playwright e2e suite
+- [x] Set up JS lint, format, and test tooling
+  - [x] ESLint flat config and Prettier at the workspace root; working `lint`/`format` scripts in every package
+  - [x] Vitest config and test scaffolding for `@fnnx-ai/common`; root `pnpm test` includes it
+  - [x] Move the duplicated jsonpatcher tests into `common`
+  - [x] CI runs lint, all unit tests, and the web Playwright e2e suite
 - [ ] Restructure JS packages around a shared model core
   - [ ] Artifact-source abstraction with last-occurrence-wins in `common`; node and web sources
   - [ ] One shared `Model` core (manifest+patches, metadata, dtypes, variant dispatch, env accessor); thin node/web wrappers

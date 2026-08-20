@@ -26,14 +26,14 @@ export class ONNXOpV1 extends BaseOp {
         this.modelFilePath = modelFile.fsPath;
     }
 
-    async warmup(...args: any[]): Promise<this> {
+    async warmup(..._args: any[]): Promise<this> {
         this.inferenceSession = await ort.InferenceSession.create(this.modelFilePath);
         this.inputNames = [...this.inferenceSession.inputNames];
         this.outputNames = [...this.inferenceSession.outputNames];
         return this;
     }
 
-    async compute(inputs: any, dynamicAttributes: any) {
+    async compute(inputs: any, _dynamicAttributes: any) {
         if (!this.inferenceSession) {
             throw new Error('Model not loaded');
         }

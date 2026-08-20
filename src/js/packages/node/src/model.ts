@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, readdirSync, statSync, rmSync, mkdtempSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
