@@ -3,14 +3,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import threading
-import os
-from typing import Any, Callable
 from concurrent.futures import ThreadPoolExecutor
-from fnnx.runtime import Runtime
-from fnnx.handlers.local import LocalHandler
+from typing import Any, Callable
+
 from fnnx.device import DeviceMap
+from fnnx.dtypes import encode_nonfinite_floats
+from fnnx.handlers.local import LocalHandler
+from fnnx.runtime import Runtime
 
 try:
     from fnnx.dtypes import NDContainer  # type: ignore
@@ -69,7 +71,8 @@ class StdIOServer:
                         "body": result,
                         "status": "ok",
                         "type": "fnnx_stdio_response",
-                    }
+                    },
+                    allow_nan=False,
                 ),
             )
         except Exception as e:
@@ -80,7 +83,8 @@ class StdIOServer:
                         "error": f"{str(e.__class__.__name__)}({str(e)})",
                         "status": "error",
                         "type": "fnnx_stdio_response",
-                    }
+                    },
+                    allow_nan=False,
                 ),
             )
 
@@ -109,13 +113,13 @@ def _parse_args():
     return p.parse_args()
 
 
-def _to_jsonable(o):
-    out = {}
+def _to_jsonable(o: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     for k, v in o.items():
         if _np is not None and isinstance(v, _np.ndarray):
-            out[k] = v.tolist()
+            out[k] = encode_nonfinite_floats(v.tolist())
         elif NDContainer is not None and isinstance(v, NDContainer):
-            out[k] = v.data
+            out[k] = encode_nonfinite_floats(v.data)
         else:
             out[k] = v
     return out

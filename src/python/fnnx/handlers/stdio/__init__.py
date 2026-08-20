@@ -1,28 +1,34 @@
 from __future__ import annotations
 
 import atexit
-from fnnx.handlers.stdio.client import StdIOClient
+import json
+import os
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from os.path import abspath
+from os.path import join as pjoin
+from shutil import rmtree
+from typing import Any
+
+from fnnx.device import DeviceMap
+from fnnx.dtypes import (
+    BUILTINS,
+    DtypesManager,
+    NDContainer,
+    decode_nonfinite_float_strings,
+    encode_nonfinite_floats,
+)
+from fnnx.envs.base import BaseEnvManager
+from fnnx.envs.conda import CondaLikeEnvManager
+from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
 from fnnx.handlers._common import unpack_model
+from fnnx.handlers.stdio.client import StdIOClient
+from fnnx.utils import to_thread
 from fnnx.validators.model_schema import (
     validate_manifest,
     validate_op_instances,
     validate_variant,
 )
-from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
-from fnnx.device import DeviceMap
-from fnnx.dtypes import BUILTINS, DtypesManager, NDContainer
-from fnnx.envs.base import BaseEnvManager
-from fnnx.envs.conda import CondaLikeEnvManager
-from fnnx.utils import to_thread
-
-import os
-from os.path import abspath, join as pjoin
-from dataclasses import dataclass
-import json
-from shutil import rmtree
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-
 from fnnx.variants.pipeline import validate_pipeline
 
 try:
@@ -124,12 +130,18 @@ class StdIOHandler(BaseHandler):
 
         self._executor = ThreadPoolExecutor(max_workers=1)
 
-    def _as_np(self, data, spec):
+    def _as_np(self, data: Any, spec: dict[str, Any]) -> Any:
         if np is None:
             raise RuntimeError("You must have numpy installed to use Array dtype")
         dtype = spec["dtype"][6:-1]
         if dtype == "string":
             return np.asarray(data).astype(np.str_)
+        if dtype in {"float32", "float64"}:
+            if isinstance(data, np.ndarray):
+                shape = data.shape
+                data = decode_nonfinite_float_strings(data.tolist())
+                return np.asarray(data).reshape(shape).astype(dtype)
+            data = decode_nonfinite_float_strings(data)
         return np.asarray(data).astype(dtype)
 
     def _inputs_to_wire(self, inputs: dict) -> dict:
@@ -139,11 +151,12 @@ class StdIOHandler(BaseHandler):
             if spec["content_type"] == "NDJSON":
                 if "Array[" in spec["dtype"]:
                     if np is not None and isinstance(val, np.ndarray):
-                        out[name] = val.tolist()
-                    else:
-                        out[name] = val
+                        val = val.tolist()
+                    out[name] = encode_nonfinite_floats(val)
                 elif "NDContainer[" in spec["dtype"]:
-                    out[name] = val.data if isinstance(val, NDContainer) else val
+                    if isinstance(val, NDContainer):
+                        val = val.data
+                    out[name] = encode_nonfinite_floats(val)
                 else:
                     raise ValueError(f"Unknown dtype {spec['dtype']}")
             elif spec["content_type"] == "JSON":
@@ -164,6 +177,8 @@ class StdIOHandler(BaseHandler):
                 if "Array[" in spec["dtype"]:
                     prepared[name] = self._as_np(raw, spec)
                 elif "NDContainer[" in spec["dtype"]:
+                    if spec["dtype"] == "NDContainer[float]":
+                        raw = decode_nonfinite_float_strings(raw)
                     prepared[name] = NDContainer(
                         raw, dtype=spec["dtype"], dtypes_manager=self.dtypes_manager
                     )

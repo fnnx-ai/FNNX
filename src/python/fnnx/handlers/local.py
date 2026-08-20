@@ -2,28 +2,33 @@ try:
     import numpy as np  # type: ignore
 except ImportError:
     np = None  # type: ignore[assignment]
-from os.path import join as pjoin
-from shutil import rmtree
 import atexit
 import json
-from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from os.path import join as pjoin
+from shutil import rmtree
 from typing import Any
+
 from fnnx.device import DeviceMap
-from fnnx.dtypes import DtypesManager, BUILTINS, NDContainer
-from fnnx.variants.pipeline import Pipeline, validate_pipeline
+from fnnx.dtypes import (
+    BUILTINS,
+    DtypesManager,
+    NDContainer,
+    decode_nonfinite_float_strings,
+)
 from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
 from fnnx.handlers._common import unpack_model
+from fnnx.ops._base import BaseOp
 from fnnx.registry import Registry
-from fnnx.variants.pyfunc import PyFuncVariant
 from fnnx.validators.model_schema import (
     validate_manifest,
     validate_op_instances,
     validate_variant,
 )
-from fnnx.ops._base import BaseOp
 from fnnx.variants._base import BaseVariant
-
+from fnnx.variants.pipeline import Pipeline, validate_pipeline
+from fnnx.variants.pyfunc import PyFuncVariant
 
 _VARIANT_CLASSES = {"pipeline": Pipeline, "pyfunc": PyFuncVariant}
 
@@ -106,17 +111,25 @@ class LocalHandler(BaseHandler):
         with open(pjoin(self.model_path, filename), "r") as f:
             return json.load(f)
 
-    def _as_np(self, data, spec):
+    def _as_np(self, data: Any, spec: dict[str, Any]) -> Any:
         if np is None:
             raise RuntimeError("You must have numpy installed to use Array dtype")
         dtype = spec["dtype"][6:-1]
         if dtype == "string":
             return np.asarray(data).astype(np.str_)
+        if dtype in {"float32", "float64"}:
+            if isinstance(data, np.ndarray):
+                shape = data.shape
+                data = decode_nonfinite_float_strings(data.tolist())
+                return np.asarray(data).reshape(shape).astype(dtype)
+            data = decode_nonfinite_float_strings(data)
         return np.asarray(data).astype(dtype)
 
     def _prepare_ndjson_input(self, input, spec):
         if "NDContainer[" in spec["dtype"]:
             if not isinstance(input, NDContainer):
+                if spec["dtype"] == "NDContainer[float]":
+                    input = decode_nonfinite_float_strings(input)
                 return NDContainer(
                     input,
                     dtype=spec["dtype"],

@@ -207,11 +207,11 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Load-time pipeline graph validation (resolution, arity, double-bind, bound-before-use, JSON content type)
   - [x] Missing-declared-output errors in `fnnx/handlers/local.py` and `fnnx/handlers/stdio/`
   - [x] Tests for each rule
-- [ ] Add boolean scalar and non-finite float handling to Python
-  - [ ] `boolean` implicit scalar and full reserved-name list in `fnnx/dtypes.py`
-  - [ ] Non-finite float string encoding/decoding on the stdio wire and input marshalling; reject other strings in float arrays
-  - [ ] Integer exactness across the wire
-  - [ ] Tests: boolean vs integer, round-trips, rejection cases
+- [x] Add boolean scalar and non-finite float handling to Python
+  - [x] `boolean` implicit scalar and full reserved-name list in `fnnx/dtypes.py`
+  - [x] Non-finite float string encoding/decoding on the stdio wire and input marshalling; reject other strings in float arrays
+  - [x] Integer exactness across the wire
+  - [x] Tests: boolean vs integer, round-trips, rejection cases
 - [ ] Fix Python environment kind handling
   - [ ] Remove the whole-`env.json` fallback in `fnnx/handlers/stdio/__init__.py`; report unsupported kinds by name
   - [ ] Exact membership matching for platform conditions in `fnnx/envs/_common.py`; absence-based defaults in the env managers

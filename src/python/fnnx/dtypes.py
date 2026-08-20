@@ -1,34 +1,76 @@
-from fnnx.validators.jsonschema import validate_jsonschema
+import math
 from copy import deepcopy
+from typing import Any
+
+from fnnx.validators.jsonschema import validate_jsonschema
+
+RESERVED_DTYPE_NAMES: frozenset[str] = frozenset(
+    {
+        "string",
+        "integer",
+        "float",
+        "boolean",
+        "Array",
+        "NDContainer",
+        "float32",
+        "float64",
+        "int32",
+        "int64",
+        "bool",
+    }
+)
+_NONFINITE_FLOATS: dict[str, float] = {
+    "NaN": float("nan"),
+    "Infinity": float("inf"),
+    "-Infinity": float("-inf"),
+}
+
+
+def encode_nonfinite_floats(data: Any) -> Any:
+    if isinstance(data, (list, tuple)):
+        return [encode_nonfinite_floats(value) for value in data]
+    if isinstance(data, float) and not math.isfinite(data):
+        if math.isnan(data):
+            return "NaN"
+        return "Infinity" if data > 0 else "-Infinity"
+    return data
+
+
+def decode_nonfinite_float_strings(data: Any) -> Any:
+    if isinstance(data, (list, tuple)):
+        return [decode_nonfinite_float_strings(value) for value in data]
+    if isinstance(data, str):
+        if data not in _NONFINITE_FLOATS:
+            raise ValueError(
+                f"Invalid float array string {data!r}; expected a non-finite float marker"
+            )
+        return _NONFINITE_FLOATS[data]
+    return data
 
 
 class DtypesManager:
-    def __init__(self, external_dtypes: dict, builtins: dict):
-        self.dtypes = deepcopy(external_dtypes)
+    def __init__(
+        self, external_dtypes: dict[str, Any], builtins: dict[str, Any]
+    ) -> None:
+        self.dtypes: dict[str, Any] = deepcopy(external_dtypes)
         self.dtypes.update(deepcopy(builtins))
         for dtype in self.dtypes:
             if "[" in dtype:
                 raise ValueError(f"Invalid dtype name: {dtype}")
-        for reserved_type in [
-            "string",
-            "integer",
-            "float",
-            "Array",
-            "NDContainer",
-        ]:
+        for reserved_type in RESERVED_DTYPE_NAMES:
             if reserved_type in self.dtypes:
                 raise ValueError(f"Invalid dtype name: {reserved_type}")
 
-    def get_dtype(self, dtype_name: str):
+    def get_dtype(self, dtype_name: str) -> dict[str, Any]:
         if dtype_name not in self.dtypes:
             raise ValueError(f"Unknown dtype: {dtype_name}")
         return self.dtypes[dtype_name]
 
-    def validate_jsonschema(self, dtype_name: str, data: dict):
+    def validate_jsonschema(self, dtype_name: str, data: Any) -> None:
         schema = self.get_dtype(dtype_name)
         validate_jsonschema(data, schema)
 
-    def validate_dtype(self, dtype_name: str, data):
+    def validate_dtype(self, dtype_name: str, data: Any) -> None:
         if isinstance(data, list):
             for d in data:
                 self.validate_dtype(dtype_name, d)
@@ -38,6 +80,11 @@ class DtypesManager:
             if dtype_name != "string":
                 raise TypeError(
                     f"Invalid data type, expected `string`, got `{dtype_name}`"
+                )
+        elif isinstance(data, bool):
+            if dtype_name != "boolean":
+                raise TypeError(
+                    f"Invalid data type, expected `boolean`, got `{dtype_name}`"
                 )
         elif isinstance(data, int):
             if dtype_name != "integer":
@@ -147,4 +194,4 @@ class NDContainer:
         return f"NDContainer(shape={self.shape}, dtype={self._dtype}, data={self.data})"
 
 
-BUILTINS = {}
+BUILTINS: dict[str, Any] = {}

@@ -1,5 +1,6 @@
 import unittest
-from fnnx.dtypes import DtypesManager, NDContainer, BUILTINS
+
+from fnnx.dtypes import BUILTINS, DtypesManager, NDContainer
 
 
 class TestDtypesManager(unittest.TestCase):
@@ -38,6 +39,38 @@ class TestDtypesManager(unittest.TestCase):
     def test_invalid_dtype_name(self):
         with self.assertRaises(ValueError):
             DtypesManager({"Invalid[Name]": {}}, {})
+
+    def test_boolean_is_distinct_from_integer_and_float(self) -> None:
+        value = NDContainer([True, False], "NDContainer[boolean]", self.manager)
+
+        self.assertEqual(value.data, [True, False])
+
+        with self.assertRaises(TypeError):
+            self.manager.validate_dtype("integer", True)
+        with self.assertRaises(TypeError):
+            self.manager.validate_dtype("float", True)
+        for invalid_value in (1, 1.0, "true", None):
+            with self.subTest(invalid_value=invalid_value), self.assertRaises(TypeError):
+                self.manager.validate_dtype("boolean", invalid_value)
+
+    def test_all_reserved_dtype_names_are_rejected(self) -> None:
+        reserved_names = {
+            "string",
+            "integer",
+            "float",
+            "boolean",
+            "Array",
+            "NDContainer",
+            "float32",
+            "float64",
+            "int32",
+            "int64",
+            "bool",
+        }
+
+        for name in reserved_names:
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                DtypesManager({name: {}}, {})
 
 
 class TestNDContainer(unittest.TestCase):
