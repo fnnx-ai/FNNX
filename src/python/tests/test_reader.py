@@ -8,8 +8,31 @@ from io import BytesIO
 from fnnx.extras.reader import Reader
 
 
-class TestReaderManifestPatching(unittest.TestCase):
+def _add_tar_member(tar: tarfile.TarFile, name: str, content: object) -> None:
+    data = (
+        content if isinstance(content, bytes) else json.dumps(content).encode("utf-8")
+    )
+    info = tarfile.TarInfo(name=name)
+    info.size = len(data)
+    tar.addfile(info, fileobj=BytesIO(data))
 
+
+def _create_tar_with_members(
+    manifest: dict[str, object], members: list[tuple[str, object]]
+) -> str:
+    fd, tar_path = tempfile.mkstemp(suffix=".tar")
+    os.close(fd)
+
+    with tarfile.open(tar_path, "w") as tar:
+        _add_tar_member(tar, "manifest.json", manifest)
+        _add_tar_member(tar, "env.json", {})
+        for name, content in members:
+            _add_tar_member(tar, name, content)
+
+    return tar_path
+
+
+class TestReaderManifestPatching(unittest.TestCase):
     def _create_test_tar(self, manifest, patches=None, env=None, metadata=None):
         """Helper to create a test tar file with manifest and optional patches."""
         if env is None:
@@ -127,6 +150,55 @@ class TestReaderManifestPatching(unittest.TestCase):
         finally:
             os.unlink(tar_path)
 
+    def test_patches_apply_in_byte_order_not_tar_order(self) -> None:
+        manifest = self._base_manifest()
+        tar_path = _create_tar_with_members(
+            manifest,
+            [
+                (
+                    "manifest-b.patch.json",
+                    [{"op": "replace", "path": "/version", "value": "from-b"}],
+                ),
+                (
+                    "manifest-a.patch.json",
+                    [{"op": "replace", "path": "/version", "value": "from-a"}],
+                ),
+            ],
+        )
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual(reader.manifest.version, "from-b")
+        finally:
+            os.unlink(tar_path)
+
+    def test_repeated_manifest_and_patch_use_only_last_occurrence(self) -> None:
+        first_manifest = self._base_manifest()
+        first_manifest["name"] = "first"
+        last_manifest = self._base_manifest()
+        last_manifest["name"] = "last"
+        tar_path = _create_tar_with_members(
+            first_manifest,
+            [
+                (
+                    "manifest-repeated.patch.json",
+                    [{"op": "add", "path": "/producer_tags/-", "value": "first"}],
+                ),
+                ("manifest.json", last_manifest),
+                (
+                    "manifest-repeated.patch.json",
+                    [{"op": "add", "path": "/producer_tags/-", "value": "last"}],
+                ),
+            ],
+        )
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual(reader.manifest.name, "last")
+            self.assertEqual(reader.manifest.producer_tags, ["test", "last"])
+        finally:
+            os.unlink(tar_path)
+
     def test_patch_adds_new_field(self):
         manifest = self._base_manifest()
         manifest["name"] = None  # Start with None
@@ -180,7 +252,6 @@ class TestReaderManifestPatching(unittest.TestCase):
 
 
 class TestReaderMetadataLoading(unittest.TestCase):
-
     def _create_test_tar_with_files(self, manifest, files_dict, env=None):
         """Helper to create a tar file with arbitrary files.
 
@@ -340,6 +411,67 @@ class TestReaderMetadataLoading(unittest.TestCase):
             ids = {m.id for m in reader.metadata}
             self.assertEqual(
                 ids, {"from_base", "from_uid1_a", "from_uid1_b", "from_uid2"}
+            )
+        finally:
+            os.unlink(tar_path)
+
+    def test_metadata_uses_defined_file_order(self) -> None:
+        manifest = self._base_manifest()
+        tar_path = _create_tar_with_members(
+            manifest,
+            [
+                ("meta-b.json", [self._meta_entry("from_b", "from_b")]),
+                ("meta.json", [self._meta_entry("from_base", "from_base")]),
+                ("meta-a.json", [self._meta_entry("from_a", "from_a")]),
+            ],
+        )
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual(
+                [entry.id for entry in reader.metadata],
+                ["from_base", "from_a", "from_b"],
+            )
+        finally:
+            os.unlink(tar_path)
+
+    def test_repeated_metadata_member_uses_only_last_occurrence(self) -> None:
+        manifest = self._base_manifest()
+        tar_path = _create_tar_with_members(
+            manifest,
+            [
+                ("meta-x.json", [self._meta_entry("first", "first")]),
+                ("meta-x.json", [self._meta_entry("last", "last")]),
+            ],
+        )
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual([entry.id for entry in reader.metadata], ["last"])
+        finally:
+            os.unlink(tar_path)
+
+    def test_bad_metadata_does_not_abort_remaining_entries_or_files(self) -> None:
+        manifest = self._base_manifest()
+        missing_producer = self._meta_entry("invalid", "invalid")
+        del missing_producer["producer"]
+        tar_path = _create_tar_with_members(
+            manifest,
+            [
+                (
+                    "meta-a.json",
+                    [missing_producer, self._meta_entry("valid_a", "valid_a")],
+                ),
+                ("meta-b.json", b"not valid JSON"),
+                ("meta-c.json", [self._meta_entry("valid_c", "valid_c")]),
+            ],
+        )
+
+        try:
+            with self.assertWarnsRegex(UserWarning, "meta-b.json"):
+                reader = Reader(tar_path)
+            self.assertEqual(
+                [entry.id for entry in reader.metadata], ["valid_a", "valid_c"]
             )
         finally:
             os.unlink(tar_path)
