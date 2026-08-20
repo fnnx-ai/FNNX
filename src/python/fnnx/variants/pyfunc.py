@@ -2,13 +2,12 @@ from fnnx.variants._base import BaseVariant, OpInstance
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 import sys
-from dataclasses import dataclass
 from os.path import join as pjoin, relpath
 from os import walk
 from threading import Lock
 import importlib.util
 import uuid
-from typing import Type
+from typing import Any
 
 _pyfunc_lock = Lock()
 
@@ -47,8 +46,8 @@ class Context:
         self.device_config = device_config
 
         # make an index of files and their absolute paths
-        self.files = {}
-        self.dir = {}
+        self.files: dict[str, str] = {}
+        self.dir: dict[str, str] = {}
         self._scan(model_path)
 
     @property
@@ -89,11 +88,15 @@ class PyFunc(ABC):
         pass
 
     @abstractmethod
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         pass
 
     @abstractmethod
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         pass
 
 
@@ -121,7 +124,7 @@ class PyFuncVariant(BaseVariant):
             self.pyfunc.warmup()
         return self
 
-    def get_pyfunc(self) -> Type[PyFunc]:
+    def get_pyfunc(self) -> type[PyFunc]:
         unique_module_name = f"temp_module_{uuid.uuid4().hex}"
         with temp_sys_path(
             pjoin(self.model_path, "variant_artifacts", "extra_modules"), _pyfunc_lock
@@ -139,8 +142,12 @@ class PyFuncVariant(BaseVariant):
             raise ValueError(f"Class {cls} is not a subclass of PyFunc")
         return cls
 
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         return self.pyfunc.compute(inputs, dynamic_attributes)
 
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         return await self.pyfunc.compute_async(inputs, dynamic_attributes)

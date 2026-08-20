@@ -1,17 +1,17 @@
 try:
     import numpy as np  # type: ignore
 except ImportError:
-    np = None
+    np = None  # type: ignore[assignment]
 from os.path import join as pjoin
 from shutil import rmtree
 import atexit
 import json
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
-from typing import Type
+from typing import Any
 from fnnx.device import DeviceMap
 from fnnx.dtypes import DtypesManager, BUILTINS, NDContainer
-from fnnx.variants.pipeline import Pipeline
+from fnnx.variants.pipeline import Pipeline, validate_pipeline
 from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
 from fnnx.handlers._common import unpack_model
 from fnnx.registry import Registry
@@ -33,7 +33,7 @@ class LocalHandlerConfig(BaseHandlerConfig):
     n_workers: int = 1
     n_workers_node: int = 1
     auto_cleanup: bool = True
-    extra_ops: dict[str, Type[BaseOp]] | None = None
+    extra_ops: dict[str, type[BaseOp]] | None = None
 
 
 class LocalHandler(BaseHandler):
@@ -70,6 +70,8 @@ class LocalHandler(BaseHandler):
 
         self.variant_config = self._load_json_config("variant_config.json")
         validate_variant(self.manifest["variant"], self.variant_config)
+        if self.manifest["variant"] == "pipeline":
+            validate_pipeline(self.manifest, self.ops, self.variant_config)
 
         external_dtypes = self._load_json_config("dtypes.json")
         self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
@@ -145,17 +147,24 @@ class LocalHandler(BaseHandler):
                 raise ValueError(f"Unknown input type {spec['content_type']}")
         return prepared_inputs
 
-    def _prepare_outputs(self, outputs: dict) -> dict:
-        return {k: outputs[k] for k in self.output_specs.keys()}
+    def _prepare_outputs(self, outputs: dict[str, Any]) -> dict[str, Any]:
+        for name in self.output_specs:
+            if name not in outputs:
+                raise ValueError(f"Missing declared output `{name}`")
+        return {name: outputs[name] for name in self.output_specs}
 
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         res = self.vrt.compute(
             self._prepare_inputs(inputs),
             dynamic_attributes=dynamic_attributes,
         )
         return self._prepare_outputs(res)
 
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         res = await self.vrt.compute_async(
             self._prepare_inputs(inputs),
             dynamic_attributes=dynamic_attributes,

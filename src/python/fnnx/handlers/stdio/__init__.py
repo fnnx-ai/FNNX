@@ -21,11 +21,14 @@ from dataclasses import dataclass
 import json
 from shutil import rmtree
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+from fnnx.variants.pipeline import validate_pipeline
 
 try:
     import numpy as np  # type: ignore
 except Exception:  # pragma: no cover
-    np = None
+    np = None  # type: ignore[assignment]
 
 WORKER_PATH = pjoin(abspath(os.path.dirname(__file__)), "worker.py")
 
@@ -70,6 +73,8 @@ class StdIOHandler(BaseHandler):
         with open(pjoin(self.model_path, "variant_config.json"), "r") as f:
             self.variant_config = json.load(f)
             validate_variant(self.manifest["variant"], self.variant_config)
+        if self.manifest["variant"] == "pipeline":
+            validate_pipeline(self.manifest, self.ops, self.variant_config)
 
         with open(pjoin(self.model_path, "dtypes.json"), "r") as f:
             external_dtypes = json.load(f)
@@ -147,10 +152,14 @@ class StdIOHandler(BaseHandler):
                 raise ValueError(f"Unknown input content_type {spec['content_type']}")
         return out
 
-    def _outputs_from_wire(self, outputs: dict) -> dict:
+    def _outputs_from_wire(self, outputs: dict[str, Any]) -> dict[str, Any]:
+        for name in self.output_specs:
+            if name not in outputs:
+                raise ValueError(f"Missing declared output `{name}`")
+
         prepared = {}
         for name, spec in self.output_specs.items():
-            raw = outputs.get(name)
+            raw = outputs[name]
             if spec["content_type"] == "NDJSON":
                 if "Array[" in spec["dtype"]:
                     prepared[name] = self._as_np(raw, spec)
@@ -166,7 +175,9 @@ class StdIOHandler(BaseHandler):
                 raise ValueError(f"Unknown output content_type {spec['content_type']}")
         return prepared
 
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         wire_inputs = self._inputs_to_wire(inputs)
         res = self._client.request(
             "compute",
@@ -175,7 +186,9 @@ class StdIOHandler(BaseHandler):
         )
         return self._outputs_from_wire(res)
 
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         def _call():
             wire_inputs = self._inputs_to_wire(inputs)
             res = self._client.request(

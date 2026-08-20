@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from os.path import basename, normpath
 from os.path import join as pjoin
+from typing import Any
 
 from fnnx.ops._base import BaseOp, OpOutput
 
@@ -53,11 +54,21 @@ class OnnxOp_V1(BaseOp):
         self._warmed_up = True
         return self
 
-    def compute(self, inputs: list, dynamic_attributes: dict, **kwargs):
+    def compute(
+        self,
+        inputs: list[Any],
+        dynamic_attributes: dict[str, str],
+        **kwargs: Any,
+    ) -> OpOutput:
         if not self._warmed_up:
             raise RuntimeError("Op is not warmed up")
         outputs = self._sess.run(self._ort_outputs, dict(zip(self._ort_inputs, inputs)))
         return OpOutput(value=list(outputs), metadata={})
 
-    async def compute_async(self, inputs: list, dynamic_attributes: dict, **kwargs):
+    async def compute_async(
+        self,
+        inputs: list[Any],
+        dynamic_attributes: dict[str, str],
+        **kwargs: Any,
+    ) -> OpOutput:
         return await to_thread(self.executor, self.compute, inputs, dynamic_attributes)

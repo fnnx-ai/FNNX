@@ -6,7 +6,7 @@ import json
 import sys
 import threading
 import os
-from typing import Callable
+from typing import Any, Callable
 from concurrent.futures import ThreadPoolExecutor
 from fnnx.runtime import Runtime
 from fnnx.handlers.local import LocalHandler
@@ -19,7 +19,7 @@ except Exception:
 try:
     import numpy as _np  # type: ignore
 except Exception:  # pragma: no cover
-    _np = None
+    _np = None  # type: ignore[assignment]
 
 
 class ProtocolWriter:
@@ -121,6 +121,16 @@ def _to_jsonable(o):
     return out
 
 
+def _dynamic_attributes_from_body(body: dict[str, Any]) -> dict[str, str]:
+    dynamic_attributes = body.get("dynamic_attributes", {})
+    if not isinstance(dynamic_attributes, dict) or any(
+        not isinstance(name, str) or not isinstance(value, str)
+        for name, value in dynamic_attributes.items()
+    ):
+        raise TypeError("dynamic_attributes must map strings to strings")
+    return dynamic_attributes
+
+
 def main():
     protocol_writer = _create_protocol_writer()
     args = _parse_args()
@@ -148,16 +158,16 @@ def main():
         cleanup=False,
     )
 
-    def rt_compute(body: dict):
+    def rt_compute(body: dict[str, Any]):
         inputs = body.get("inputs", {})
-        dynamic_attributes = body.get("dynamic_attributes", {}) or {}
+        dynamic_attributes = _dynamic_attributes_from_body(body)
 
         result = runtime.compute(inputs, dynamic_attributes)
         return _to_jsonable(result)
 
-    def rt_compute_async(body: dict):
+    def rt_compute_async(body: dict[str, Any]):
         inputs = body.get("inputs", {})
-        dynamic_attributes = body.get("dynamic_attributes", {}) or {}
+        dynamic_attributes = _dynamic_attributes_from_body(body)
 
         result = loop.run_until_complete(
             runtime.compute_async(inputs, dynamic_attributes)

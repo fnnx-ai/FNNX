@@ -1,8 +1,8 @@
 import os
 import unittest
+from typing import Any, cast
 from fnnx.ops._base import BaseOp, OpOutput
 from fnnx.utils import to_thread
-from fnnx.device import DeviceConfig
 from fnnx.dtypes import NDContainer
 from fnnx.runtime import Runtime
 from fnnx.handlers.local import LocalHandlerConfig, LocalHandler
@@ -15,11 +15,16 @@ MODELS_BASE_PATH = os.path.join(os.path.dirname(__file__), "models")
 class _TestOP(BaseOp):
     def warmup(
         self,
-    ):
+    ) -> "_TestOP":
         self._warmed_up = True
         return self
 
-    def compute(self, inputs: list, **kwargs):
+    def compute(
+        self,
+        inputs: list[Any],
+        dynamic_attributes: dict[str, str],
+        **kwargs: Any,
+    ) -> OpOutput:
         return OpOutput(
             [
                 NDContainer(
@@ -30,16 +35,28 @@ class _TestOP(BaseOp):
             ]
         )
 
-    async def compute_async(self, inputs: list, *args, **kwargs):
+    async def compute_async(
+        self,
+        inputs: list[Any],
+        dynamic_attributes: dict[str, str],
+        **kwargs: Any,
+    ) -> OpOutput:
         executor = kwargs.get("op_executor")
-        return await to_thread(executor, self.compute, inputs)
+        return await to_thread(
+            executor, self.compute, inputs, dynamic_attributes=dynamic_attributes
+        )
 
 
 class _TestOpWithDynattrs(_TestOP):
     supported_dynamic_attributes = ["testop::value"]
     required_dynamic_attributes = ["testop::value"]
 
-    def compute(self, inputs: list, dynamic_attributes: dict, **kwargs):
+    def compute(
+        self,
+        inputs: list[Any],
+        dynamic_attributes: dict[str, str],
+        **kwargs: Any,
+    ) -> OpOutput:
         dynattrs = self.extract_dynamic_attribute(dynamic_attributes)
         self.verify_required_dynamic_attributes(dynattrs)
 
@@ -54,8 +71,12 @@ class _TestOpWithDynattrs(_TestOP):
         )
 
     async def compute_async(
-        self, inputs: list, dynamic_attributes: dict, *args, **kwargs
-    ):
+        self,
+        inputs: list[Any],
+        dynamic_attributes: dict[str, str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> OpOutput:
         return self.compute(inputs, dynamic_attributes, **kwargs)
 
 
@@ -141,13 +162,14 @@ class Test_TestOP(unittest.TestCase):
     def setUp(self) -> None:
         from fnnx.spec import schema
 
-        schema["ops"]["TestOp"] = _testop
+        ops_schema = cast(dict[str, Any], schema["ops"])
+        ops_schema["TestOp"] = _testop
         self.runtime = Runtime(
             os.path.join(MODELS_BASE_PATH, "model_testop.fnnx"),
             handler=LocalHandler,
             handler_config=LocalHandlerConfig(extra_ops={"TestOp": _TestOP}),
         )
-        schema["ops"].pop("TestOp")
+        ops_schema.pop("TestOp")
 
         self.inputs = {"x": [{"hello": "world"}]}
 
@@ -169,7 +191,8 @@ class Test_TestOP_Dynattrs(unittest.TestCase):
     def setUp(self) -> None:
         from fnnx.spec import schema
 
-        schema["ops"]["TestOp"] = _testop
+        ops_schema = cast(dict[str, Any], schema["ops"])
+        ops_schema["TestOp"] = _testop
         self.runtime = Runtime(
             os.path.join(MODELS_BASE_PATH, "model_testop_dynattrs.fnnx"),
             handler=LocalHandler,
@@ -187,7 +210,7 @@ class Test_TestOP_Dynattrs(unittest.TestCase):
                 extra_ops={"TestOp": _TestOpWithDynattrs}
             ),
         )
-        schema["ops"].pop("TestOp")
+        ops_schema.pop("TestOp")
 
         self.inputs = {"x": [{"hello": "world"}]}
 
@@ -198,6 +221,9 @@ class Test_TestOP_Dynattrs(unittest.TestCase):
 
     def test_compute(self):
         expected = "from external source"
+        res = self.runtime.compute(self.inputs, {"testdynattr": expected})
+        self._check_output(res, expected)
+        expected = ""
         res = self.runtime.compute(self.inputs, {"testdynattr": expected})
         self._check_output(res, expected)
         expected = "default_value"
@@ -212,6 +238,9 @@ class Test_TestOP_Dynattrs(unittest.TestCase):
 
     def test_compute_async(self):
         expected = "from external source"
+        res = run(self.runtime.compute_async(self.inputs, {"testdynattr": expected}))
+        self._check_output(res, expected)
+        expected = ""
         res = run(self.runtime.compute_async(self.inputs, {"testdynattr": expected}))
         self._check_output(res, expected)
         expected = "default_value"

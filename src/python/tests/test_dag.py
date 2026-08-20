@@ -2,7 +2,7 @@ import unittest
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
-from dataclasses import dataclass
+from typing import Any
 from fnnx.variants._common.dag import (
     dag_compute_async,
     dag_compute,
@@ -64,6 +64,33 @@ class TestDagFunctions(unittest.TestCase):
         self.assertIn("y", result)
         self.assertEqual(result["y"], 6)
 
+    def test_dag_compute_async_does_not_leak_extra_dynamic_attributes(self) -> None:
+        async def compute_dynamic_attribute(
+            component: Component, inputs: list[Any], **kwargs: Any
+        ) -> list[str]:
+            return [kwargs["dynamic_attributes"]["n"]]
+
+        inputs = {"x": np.array([1])}
+        components = [
+            Component(inputs=["x"], outputs=["y1"], extra_dynattrs={"n": "pinned"}),
+            Component(inputs=["x"], outputs=["y2"], extra_dynattrs={}),
+        ]
+        passthrough = {"dynamic_attributes": {"n": "caller"}}
+
+        result = asyncio.run(
+            dag_compute_async(
+                inputs,
+                components,
+                compute_dynamic_attribute,
+                self.as_val,
+                passthrough,
+            )
+        )
+
+        self.assertEqual(result["y1"], "pinned")
+        self.assertEqual(result["y2"], "caller")
+        self.assertEqual(passthrough["dynamic_attributes"], {"n": "caller"})
+
     def compute_fn(self, component, inputs, **kwargs):
         return [np.prod(inputs[0])]
 
@@ -89,6 +116,33 @@ class TestDagFunctions(unittest.TestCase):
         )
         self.assertIn("y", result)
         self.assertEqual(result["y"], 24)
+
+    def test_dag_compute_does_not_leak_extra_dynamic_attributes(self) -> None:
+        def compute_dynamic_attribute(
+            component: Component, inputs: list[Any], **kwargs: Any
+        ) -> list[str]:
+            return [kwargs["dynamic_attributes"]["n"]]
+
+        inputs = {"x": np.array([1])}
+        components = [
+            Component(inputs=["x"], outputs=["y1"], extra_dynattrs={"n": "pinned"}),
+            Component(inputs=["x"], outputs=["y2"], extra_dynattrs={}),
+        ]
+        passthrough = {"dynamic_attributes": {"n": "caller"}}
+
+        with ThreadPoolExecutor(max_workers=2) as graph_executor:
+            result = dag_compute(
+                inputs,
+                components,
+                graph_executor,
+                compute_dynamic_attribute,
+                self.as_val,
+                passthrough,
+            )
+
+        self.assertEqual(result["y1"], "pinned")
+        self.assertEqual(result["y2"], "caller")
+        self.assertEqual(passthrough["dynamic_attributes"], {"n": "caller"})
 
 
 if __name__ == "__main__":

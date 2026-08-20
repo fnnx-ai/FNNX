@@ -201,12 +201,12 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Last-occurrence-wins for repeated member names in patches and metadata
   - [x] Malformed-entry and unparseable-sidecar tolerance
   - [x] Tests: ordering, duplicates, tolerance (extend `tests/test_reader.py`)
-- [ ] Fix Python dynamic attributes and pipeline semantics
-  - [ ] Absence-only defaults in `fnnx/ops/_base.py`; string-typed values end-to-end
-  - [ ] Fix `extra_dynattrs` leakage in `fnnx/variants/_common/dag.py` (sync and async)
-  - [ ] Load-time pipeline graph validation (resolution, arity, double-bind, bound-before-use, JSON content type)
-  - [ ] Missing-declared-output errors in `fnnx/handlers/local.py` and `fnnx/handlers/stdio/`
-  - [ ] Tests for each rule
+- [x] Fix Python dynamic attributes and pipeline semantics
+  - [x] Absence-only defaults in `fnnx/ops/_base.py`; string-typed values end-to-end
+  - [x] Fix `extra_dynattrs` leakage in `fnnx/variants/_common/dag.py` (sync and async)
+  - [x] Load-time pipeline graph validation (resolution, arity, double-bind, bound-before-use, JSON content type)
+  - [x] Missing-declared-output errors in `fnnx/handlers/local.py` and `fnnx/handlers/stdio/`
+  - [x] Tests for each rule
 - [ ] Add boolean scalar and non-finite float handling to Python
   - [ ] `boolean` implicit scalar and full reserved-name list in `fnnx/dtypes.py`
   - [ ] Non-finite float string encoding/decoding on the stdio wire and input marshalling; reject other strings in float arrays
