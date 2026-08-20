@@ -10,7 +10,7 @@ from pydantic_models.ops.onnx import ONNX_v1
 from pydantic_models.meta import MetaEntry
 from pydantic_models.envs import Python3_CondaPip
 
-SPEC_VERSION = "0.0.4"
+SPEC_VERSION = "0.1.0"
 
 manifest_json_schema = Manifest.model_json_schema()
 ops_json_schema = OpInstances.model_json_schema()
