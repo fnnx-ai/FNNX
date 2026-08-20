@@ -27,7 +27,6 @@
                     "version": 12
                 }
             ],
-            "requires_ort_extensions": false,
             "has_external_data": false,
             "onnx_ir_version": 7
         },
@@ -61,7 +60,6 @@
                     "version": 12
                 }
             ],
-            "requires_ort_extensions": false,
             "has_external_data": false,
             "onnx_ir_version": 7
         },
@@ -95,7 +93,6 @@
                     "version": 12
                 }
             ],
-            "requires_ort_extensions": false,
             "has_external_data": false,
             "onnx_ir_version": 7
         },
@@ -143,7 +140,6 @@
                     "version": 12
                 }
             ],
-            "requires_ort_extensions": false,
             "has_external_data": false,
             "onnx_ir_version": 7
         },

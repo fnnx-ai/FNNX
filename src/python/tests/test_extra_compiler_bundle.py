@@ -154,7 +154,6 @@ def _write_bundle(
             "outputs": list(node.output_specs),
             "attributes": {
                 "opsets": [{"domain": "ai.onnx", "version": node.opset}],
-                "requires_ort_extensions": False,
                 "has_external_data": False,
                 "onnx_ir_version": 10,
             },
@@ -1121,23 +1120,6 @@ def test_a_manifest_missing_a_required_field_is_rejected(tmp_path):
     (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(CompileError, match="`manifest.json` is not valid"):
-        compile_bundle(bundle, tmp_path / "out")
-
-
-def test_a_node_requiring_ort_extensions_is_rejected(tmp_path):
-    bundle = _write_bundle(
-        tmp_path / "extensions.fnnx",
-        _diamond_nodes(),
-        [_manifest_tensor("x")],
-        [_manifest_tensor("out")],
-    )
-    ops = json.loads((bundle / "ops.json").read_text())
-    ops[1]["attributes"]["requires_ort_extensions"] = True
-    (bundle / "ops.json").write_text(json.dumps(ops), encoding="utf-8")
-
-    with pytest.raises(
-        CompileError, match="`left`: the op requires the onnxruntime extensions"
-    ):
         compile_bundle(bundle, tmp_path / "out")
 
 

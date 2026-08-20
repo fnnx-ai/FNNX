@@ -436,11 +436,6 @@ def compile_onnx_node(compilation: NodeCompilation) -> Program:
 
 def _compile_onnx_model(compilation: NodeCompilation) -> Program:
     instance = compilation.instance
-    if instance.attributes.get("requires_ort_extensions"):
-        raise CompileError(
-            "the op requires the onnxruntime extensions, which the C compiler does not "
-            "implement."
-        )
     path = instance.artifact_dir / ONNX_MODEL_FILE
     if not path.is_file():
         raise CompileError(

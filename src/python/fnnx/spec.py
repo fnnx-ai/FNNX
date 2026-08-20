@@ -1,6 +1,6 @@
 # This file is auto generated and must not be modified manually!
 schema = {
-    "version": "0.0.4",
+    "version": "0.1.0",
     "manifest": {
         "$defs": {
             "JSON": {
@@ -179,7 +179,11 @@ schema = {
                         "title": "Outputs",
                         "type": "array",
                     },
-                    "attributes": {"title": "Attributes", "type": "object"},
+                    "attributes": {
+                        "additionalProperties": True,
+                        "title": "Attributes",
+                        "type": "object",
+                    },
                     "dynamic_attributes": {
                         "additionalProperties": {"$ref": "#/$defs/OpDynamicAttribute"},
                         "title": "Dynamic Attributes",
@@ -219,7 +223,11 @@ schema = {
                 "title": "Producer Tags",
                 "type": "array",
             },
-            "payload": {"title": "Payload", "type": "object"},
+            "payload": {
+                "additionalProperties": True,
+                "title": "Payload",
+                "type": "object",
+            },
         },
         "required": ["id", "producer", "producer_version", "producer_tags", "payload"],
         "title": "MetaEntry",
@@ -315,10 +323,6 @@ schema = {
                             "title": "Opsets",
                             "type": "array",
                         },
-                        "requires_ort_extensions": {
-                            "title": "Requires Ort Extensions",
-                            "type": "boolean",
-                        },
                         "has_external_data": {
                             "title": "Has External Data",
                             "type": "boolean",
@@ -342,12 +346,7 @@ schema = {
                             "title": "Used Operators",
                         },
                     },
-                    "required": [
-                        "opsets",
-                        "requires_ort_extensions",
-                        "has_external_data",
-                        "onnx_ir_version",
-                    ],
+                    "required": ["opsets", "has_external_data", "onnx_ir_version"],
                     "title": "ONNXAttributes",
                     "type": "object",
                 },
@@ -464,7 +463,10 @@ schema = {
             "properties": {
                 "pyfunc_classname": {"title": "Pyfunc Classname", "type": "string"},
                 "extra_values": {
-                    "anyOf": [{"type": "object"}, {"type": "null"}],
+                    "anyOf": [
+                        {"additionalProperties": True, "type": "object"},
+                        {"type": "null"},
+                    ],
                     "default": None,
                     "title": "Extra Values",
                 },
