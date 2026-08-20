@@ -37,6 +37,7 @@ except Exception:  # pragma: no cover
     np = None  # type: ignore[assignment]
 
 WORKER_PATH = pjoin(abspath(os.path.dirname(__file__)), "worker.py")
+_ENVIRONMENT_KIND = "python3::conda_pip"
 
 
 @dataclass
@@ -87,11 +88,19 @@ class StdIOHandler(BaseHandler):
             self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
 
         env_spec_path = pjoin(self.model_path, "env.json")
-        raw_env_spec: dict = {}
+        raw_env_spec: dict[str, Any] = {}
         if os.path.exists(env_spec_path):
             with open(env_spec_path, "r") as f:
                 raw_env_spec = json.load(f)
-        conda_like_spec = raw_env_spec.get("python3::conda_pip", raw_env_spec or {})
+        if _ENVIRONMENT_KIND not in raw_env_spec:
+            offered_kinds = (
+                ", ".join(f"`{kind}`" for kind in sorted(raw_env_spec)) or "none"
+            )
+            raise RuntimeError(
+                "Artifact is unsupported by StdIOHandler because it offers no "
+                f"implemented environment kind; offered kinds: {offered_kinds}"
+            )
+        conda_like_spec = raw_env_spec[_ENVIRONMENT_KIND]
 
         if isinstance(self.handler_config.env_manager, str):
             import importlib

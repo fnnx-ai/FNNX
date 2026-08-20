@@ -212,10 +212,10 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Non-finite float string encoding/decoding on the stdio wire and input marshalling; reject other strings in float arrays
   - [x] Integer exactness across the wire
   - [x] Tests: boolean vs integer, round-trips, rejection cases
-- [ ] Fix Python environment kind handling
-  - [ ] Remove the whole-`env.json` fallback in `fnnx/handlers/stdio/__init__.py`; report unsupported kinds by name
-  - [ ] Exact membership matching for platform conditions in `fnnx/envs/_common.py`; absence-based defaults in the env managers
-  - [ ] Tests: unsupported kind, condition matching
+- [x] Fix Python environment kind handling
+  - [x] Remove the whole-`env.json` fallback in `fnnx/handlers/stdio/__init__.py`; report unsupported kinds by name
+  - [x] Exact membership matching for platform conditions in `fnnx/envs/_common.py`; absence-based defaults in the env managers
+  - [x] Tests: unsupported kind, condition matching
 - [ ] Add ruff and mypy gates to the Python package
   - [ ] Configs in `src/python/pyproject.toml`, excluding `fnnx/extras/compilers/` and compiler/mlflow test files
   - [ ] Fix all findings in scope; wire both tools into CI

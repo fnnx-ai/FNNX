@@ -1,4 +1,6 @@
 import os
+from typing import Any
+
 from fnnx.envs._common import run_cmd
 from fnnx.envs._common import select_pip_deps
 from fnnx.console import console
@@ -12,17 +14,21 @@ class UvEnvManager(BaseEnvManager):
     Ephemeral uv-based environment manager.
     """
 
-    def __init__(self, env_spec: dict, accelerator: str | None = None):
+    def __init__(
+        self, env_spec: dict[str, Any], accelerator: str | None = None
+    ) -> None:
         self.env_spec = env_spec
-        self.accelerator = (accelerator or "cpu").lower()
+        self.accelerator = ("cpu" if accelerator is None else accelerator).lower()
 
-        build_deps = env_spec.get("build_dependencies") or []
+        build_deps: list[str] = list(env_spec.get("build_dependencies", []))
         if len(build_deps) > 0:
             console.warn("UvEnvManager does not support build dependencies. Ignoring.")
-        self.python_version = env_spec.get("python_version") or get_python_version(
-            micro=False
+        self.python_version = (
+            env_spec["python_version"]
+            if "python_version" in env_spec
+            else get_python_version(micro=False)
         )
-        deps = env_spec.get("dependencies") or []
+        deps: list[dict[str, Any]] = list(env_spec.get("dependencies", []))
         if not deps:
             deps.append({"package": "fnnx[core]"})
 
