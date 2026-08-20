@@ -49,7 +49,7 @@ class TestDagFunctions(unittest.TestCase):
                 extra_dynattrs={},
             )
         ]
-        components_passthrough = {}
+        components_passthrough: dict[str, Any] = {}
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(
@@ -104,7 +104,7 @@ class TestDagFunctions(unittest.TestCase):
                 extra_dynattrs={},
             )
         ]
-        components_passthrough = {}
+        components_passthrough: dict[str, Any] = {}
         graph_executor = ThreadPoolExecutor(max_workers=2)
         result = dag_compute(
             inputs,

@@ -216,9 +216,9 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Remove the whole-`env.json` fallback in `fnnx/handlers/stdio/__init__.py`; report unsupported kinds by name
   - [x] Exact membership matching for platform conditions in `fnnx/envs/_common.py`; absence-based defaults in the env managers
   - [x] Tests: unsupported kind, condition matching
-- [ ] Add ruff and mypy gates to the Python package
-  - [ ] Configs in `src/python/pyproject.toml`, excluding `fnnx/extras/compilers/` and compiler/mlflow test files
-  - [ ] Fix all findings in scope; wire both tools into CI
+- [x] Add ruff and mypy gates to the Python package
+  - [x] Configs in `src/python/pyproject.toml`, excluding `fnnx/extras/compilers/` and compiler/mlflow test files
+  - [x] Fix all findings in scope; wire both tools into CI
 - [ ] Set up JS lint, format, and test tooling
   - [ ] ESLint flat config and Prettier at the workspace root; working `lint`/`format` scripts in every package
   - [ ] Vitest config and test scaffolding for `@fnnx-ai/common`; root `pnpm test` includes it

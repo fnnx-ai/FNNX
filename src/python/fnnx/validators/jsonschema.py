@@ -159,9 +159,8 @@ def _validate_object(instance, schema, definitions):
                     _validate(instance[prop], subschema, definitions)
     if "additionalProperties" in schema:
         allowed_props = set(schema.get("properties", {}).keys())
-        pattern_props = set()
+        pattern_props: set[str] = set()
         if "patternProperties" in schema:
-            pattern_props = set()
             for pattern in schema["patternProperties"]:
                 for prop in instance:
                     if re.match(pattern, prop):
@@ -202,8 +201,9 @@ def _validate_array(instance, schema, definitions):
                 f'Array has {length} items, which is more than maxItems {schema["maxItems"]}'
             )
     if "uniqueItems" in schema and schema["uniqueItems"]:
-        seen = set()
+        seen: set[object] = set()
         for item in instance:
+            item_hash: object
             if isinstance(item, dict):
                 item_hash = frozenset(item.items())
             elif isinstance(item, list):

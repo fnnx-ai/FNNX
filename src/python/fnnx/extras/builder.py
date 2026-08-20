@@ -65,12 +65,12 @@ class PyfuncBuilder:
         self._version = model_version
         self._description = model_description
 
-        self._extra_modules = []
-        self._extra_files = []
+        self._extra_modules: list[str] = []
+        self._extra_files: list[tuple[str, str]] = []
         self._extra_values: dict | None = None
 
-        self._build_dependencies = []
-        self._rt_dependencies = []
+        self._build_dependencies: list[str] = []
+        self._rt_dependencies: list[str] = []
 
         self._python_version = python_version
 

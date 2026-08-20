@@ -253,7 +253,7 @@ class TestEdgeCases(unittest.TestCase):
 
     def test_empty_operations_in_patch(self):
         doc = {"foo": "bar"}
-        patch = []
+        patch: list[dict[str, object]] = []
         result = apply_patches(doc, [patch])
         self.assertEqual(result, {"foo": "bar"})
 

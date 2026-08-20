@@ -1,8 +1,12 @@
+from types import ModuleType
+
+from fnnx.dtypes import NDContainer
+
+np: ModuleType | None
 try:
     import numpy as np
 except ImportError:
     np = None
-from fnnx.dtypes import NDContainer
 
 
 def validate_inputs(inputs, input_specs):

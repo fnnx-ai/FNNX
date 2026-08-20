@@ -255,11 +255,8 @@ class TestValidateJSONSchema(unittest.TestCase):
 
     def test_anyOf(self):
         schema = {"anyOf": [{"type": "string"}, {"type": "number"}]}
-        instance = "test"
-        validate_jsonschema(instance, schema)
-
-        instance = 5
-        validate_jsonschema(instance, schema)
+        validate_jsonschema("test", schema)
+        validate_jsonschema(5, schema)
 
     def test_anyOf_invalid(self):
         schema = {"anyOf": [{"type": "string"}, {"type": "number"}]}
@@ -386,11 +383,8 @@ class TestValidateJSONSchema(unittest.TestCase):
 
     def test_multiple_types_valid(self):
         schema = {"type": ["string", "number"]}
-        instance = "test"
-        validate_jsonschema(instance, schema)
-
-        instance = 5
-        validate_jsonschema(instance, schema)
+        validate_jsonschema("test", schema)
+        validate_jsonschema(5, schema)
 
     def test_multiple_types_invalid(self):
         schema = {"type": ["string", "number"]}
@@ -477,7 +471,7 @@ class TestValidateJSONSchema(unittest.TestCase):
             validate_jsonschema(instance, schema)
 
     def test_empty_schema(self):
-        schema = {}
+        schema: dict[str, object] = {}
         instance = "anything"
         validate_jsonschema(instance, schema)  # Should accept any instance
 

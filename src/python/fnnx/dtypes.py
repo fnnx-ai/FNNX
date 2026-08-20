@@ -130,23 +130,26 @@ class NDContainer:
         return self.data[index]
 
     def reshape(self, *new_shape):
-        if isinstance(new_shape[0], tuple) or isinstance(new_shape[0], list):
-            new_shape = new_shape[0]
+        new_dimensions = (
+            new_shape[0]
+            if isinstance(new_shape[0], (tuple, list))
+            else new_shape
+        )
         # Check if the total number of elements matches
-        if self._product(new_shape) != self._product(self.shape):
+        if self._product(new_dimensions) != self._product(self.shape):
             raise ValueError(
                 "Cannot reshape array of size {} into shape {}".format(
-                    self._product(self.shape), new_shape
+                    self._product(self.shape), new_dimensions
                 )
             )
         flat_list = self.flatten(self.data)
-        if self._product(new_shape) != self._product(self.shape):
+        if self._product(new_dimensions) != self._product(self.shape):
             raise ValueError(
                 "Cannot reshape array of size {} into shape {}".format(
-                    self._product(self.shape), new_shape
+                    self._product(self.shape), new_dimensions
                 )
             )
-        reshaped = self._reshape_helper(flat_list, list(new_shape))
+        reshaped = self._reshape_helper(flat_list, list(new_dimensions))
         return NDContainer(
             data=reshaped, dtype=self.dtype, dtypes_manager=self.dtypes_manager
         )
