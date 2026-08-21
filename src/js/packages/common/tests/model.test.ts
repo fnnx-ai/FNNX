@@ -129,6 +129,12 @@ describe("shared Model core", () => {
         expect(model.getEnv()).not.toHaveProperty("changed");
     });
 
+    it("rejects a reserved dtype name while loading an artifact", () => {
+        const source = new MemorySource(modelDocuments({ "dtypes.json": { boolean: {} } }));
+
+        expect(() => new Model(source, { operators: {} })).toThrow(/Invalid dtype name: boolean/);
+    });
+
     it("dispatches unsupported variants with a typed error", () => {
         const source = new MemorySource(
             modelDocuments({ "manifest.json": { ...MANIFEST, variant: "pyfunc" } })

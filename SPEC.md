@@ -232,11 +232,11 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Split `ndarray.ts` and `tar.ts` by concern; unify the tar header parsers; tar safety rules
   - [x] Re-export input-construction types from node and web entry points; add `license`/`repository`/`exports`; lockstep versions at 0.1.0
   - [x] Migrate existing tests; add model-core tests in `common`
-- [ ] Align JS dtypes and NDJSON handling with the spec
-  - [ ] `float64` and `boolean` support; full reserved-name list; safe boolean casting
-  - [ ] Nested↔flat NDJSON codec with shape validation, non-finite string handling, exact integers (including `int64` serialization)
-  - [ ] FNNX JSON Schema subset validator replacing the `required`-only stub
-  - [ ] Tests: all six element types, four scalars, codec round-trips, validator keyword coverage
+- [x] Align JS dtypes and NDJSON handling with the spec
+  - [x] `float64` and `boolean` support; full reserved-name list; safe boolean casting
+  - [x] Nested↔flat NDJSON codec with shape validation, non-finite string handling, exact integers (including `int64` serialization)
+  - [x] FNNX JSON Schema subset validator replacing the `required`-only stub
+  - [x] Tests: all six element types, four scalars, codec round-trips, validator keyword coverage
 - [ ] Align JS pipeline and reading semantics with the spec
   - [ ] Load-time pipeline graph validation; unbound-input and missing-output errors; JSON content type rejection
   - [ ] Byte-order filename sorting for patches and sidecars; metadata order and tolerance

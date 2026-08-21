@@ -1,5 +1,5 @@
 import { ArtifactSource, readArtifactFile } from "./artifact.js";
-import { DtypesManager } from "./dtypes.js";
+import { DtypeSchema, DtypesManager } from "./dtypes.js";
 import { InvalidArtifactFileError, ModelNotWarmedUpError } from "./errors.js";
 import { DynamicAttributes, HandlerConfig, Inputs, LocalHandler, Outputs } from "./handler.js";
 import { Manifest, MetaEntry, OpInstanceConfig } from "./interfaces.js";
@@ -11,7 +11,7 @@ const META_PATTERN = /^meta(-[^/]+)?\.json$/;
 export class Model {
     private readonly manifest: Manifest;
     private readonly metadata: MetaEntry[];
-    private readonly dtypes: Record<string, object>;
+    private readonly dtypes: Record<string, DtypeSchema>;
     private readonly environment: Record<string, unknown>;
     private readonly handler: LocalHandler;
     private warmedUp = false;
@@ -35,7 +35,7 @@ export class Model {
                 );
             }
         }
-        this.dtypes = dtypes as Record<string, object>;
+        this.dtypes = dtypes as Record<string, DtypeSchema>;
         this.environment = this.loadOptionalObject(source, "env.json");
         this.metadata = this.loadMetadata(source);
         this.handler = new LocalHandler(
@@ -68,7 +68,7 @@ export class Model {
         return cloneJson(this.metadata);
     }
 
-    getDtypes(): Record<string, object> {
+    getDtypes(): Record<string, DtypeSchema> {
         return cloneJson(this.dtypes);
     }
 

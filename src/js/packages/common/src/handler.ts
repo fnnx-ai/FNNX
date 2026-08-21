@@ -63,6 +63,7 @@ export class LocalHandler {
         }
         const dtypes: Record<string, ArrayDType> = {
             float32: ArrayDType.Float32,
+            float64: ArrayDType.Float64,
             int32: ArrayDType.Int32,
             int64: ArrayDType.Int64,
             string: ArrayDType.String,
@@ -106,7 +107,7 @@ export class LocalHandler {
                 if (this.variant === "pipeline") {
                     throw new Error("Pipeline variant does not support JSON inputs");
                 }
-                this.dtypesManager.validateJsonSchema(spec.dtype, input as Record<string, unknown>);
+                this.dtypesManager.validateJsonSchema(spec.dtype, input);
                 preparedInputs[name] = input;
             }
         }
