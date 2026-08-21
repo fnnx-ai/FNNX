@@ -202,6 +202,40 @@ describe("Model reader: manifest patches", () => {
         model.cleanup();
     });
 
+    it("keeps only the last repeated manifest and metadata members", async () => {
+        const replacement = { ...BASE_MANIFEST, description: "last manifest" };
+        const firstMetadata = [
+            {
+                id: "first",
+                producer: "tests",
+                producer_version: "1",
+                producer_tags: [],
+                payload: {},
+            },
+        ];
+        const lastMetadata = [
+            {
+                id: "last",
+                producer: "tests",
+                producer_version: "1",
+                producer_tags: [],
+                payload: {},
+            },
+        ];
+        const tar = createMultiFileTar([
+            ...makeBaseFiles({ meta: [] }),
+            { name: "meta-x.json", content: JSON.stringify(firstMetadata) },
+            { name: "manifest.json", content: JSON.stringify(replacement) },
+            { name: "meta-x.json", content: JSON.stringify(lastMetadata) },
+        ]);
+
+        const model = await Model.fromBuffer(Buffer.from(tar));
+
+        expect(model.getManifest().description).toBe("last manifest");
+        expect(model.getMetadata().map((entry) => entry.id)).toEqual(["last"]);
+        model.cleanup();
+    });
+
     it("should replace a nested value in inputs via patch", async () => {
         const patch = [
             { op: "replace", path: "/inputs/0/dtype", value: "Array[int32]" },

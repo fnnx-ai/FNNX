@@ -26,8 +26,7 @@ const testHTML = `
   <body>
     <div id="status">Loading...</div>
     <script type="module">
-      import { Model } from '/dist/web/index.js';
-      import { NDArray } from '/dist/common/index.js';
+      import { Model, NDArray } from '/dist/web/index.js';
       
       window.Model = Model;
       window.NDArray = NDArray;

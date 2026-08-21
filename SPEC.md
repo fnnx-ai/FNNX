@@ -224,14 +224,14 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Vitest config and test scaffolding for `@fnnx-ai/common`; root `pnpm test` includes it
   - [x] Move the duplicated jsonpatcher tests into `common`
   - [x] CI runs lint, all unit tests, and the web Playwright e2e suite
-- [ ] Restructure JS packages around a shared model core
-  - [ ] Artifact-source abstraction with last-occurrence-wins in `common`; node and web sources
-  - [ ] One shared `Model` core (manifest+patches, metadata, dtypes, variant dispatch, env accessor); thin node/web wrappers
-  - [ ] Shared ONNX op base with abstract session factory; fixed `model.onnx` path; attribute declaration checks
-  - [ ] Wire-shaped interface types; typed error classes; remove dead code and the device-map dead plumbing
-  - [ ] Split `ndarray.ts` and `tar.ts` by concern; unify the tar header parsers; tar safety rules
-  - [ ] Re-export input-construction types from node and web entry points; add `license`/`repository`/`exports`; lockstep versions at 0.1.0
-  - [ ] Migrate existing tests; add model-core tests in `common`
+- [x] Restructure JS packages around a shared model core
+  - [x] Artifact-source abstraction with last-occurrence-wins in `common`; node and web sources
+  - [x] One shared `Model` core (manifest+patches, metadata, dtypes, variant dispatch, env accessor); thin node/web wrappers
+  - [x] Shared ONNX op base with abstract session factory; fixed `model.onnx` path; attribute declaration checks
+  - [x] Wire-shaped interface types; typed error classes; remove dead code and the device-map dead plumbing
+  - [x] Split `ndarray.ts` and `tar.ts` by concern; unify the tar header parsers; tar safety rules
+  - [x] Re-export input-construction types from node and web entry points; add `license`/`repository`/`exports`; lockstep versions at 0.1.0
+  - [x] Migrate existing tests; add model-core tests in `common`
 - [ ] Align JS dtypes and NDJSON handling with the spec
   - [ ] `float64` and `boolean` support; full reserved-name list; safe boolean casting
   - [ ] Nested↔flat NDJSON codec with shape validation, non-finite string handling, exact integers (including `int64` serialization)

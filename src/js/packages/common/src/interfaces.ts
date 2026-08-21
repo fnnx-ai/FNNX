@@ -1,4 +1,3 @@
-// Base interfaces
 export interface ModelIO {
     name: string;
     content_type: string;
@@ -6,13 +5,12 @@ export interface ModelIO {
     tags?: string[];
 }
 
-export interface JSONI extends ModelIO {
+export interface JSONIO extends ModelIO {
     content_type: "JSON";
 }
 
-export interface NDJSON extends ModelIO {
+export interface NDJSONIO extends ModelIO {
     content_type: "NDJSON";
-    dtype: string;
     shape: (string | number)[];
 }
 
@@ -24,14 +22,14 @@ export interface Var {
 
 export interface Manifest {
     variant: string;
-    name?: string;
-    version?: string;
-    description?: string;
+    name?: string | null;
+    version?: string | null;
+    description?: string | null;
     producer_name: string;
     producer_version: string;
     producer_tags: string[];
-    inputs: (NDJSON | JSONI)[];
-    outputs: (NDJSON | JSONI)[];
+    inputs: (NDJSONIO | JSONIO)[];
+    outputs: (NDJSONIO | JSONIO)[];
     dynamic_attributes: Var[];
     env_vars: Var[];
 }
@@ -54,34 +52,28 @@ export interface OpIO {
 
 export interface OpDynamicAttribute {
     name: string;
-    defaultValue: string;
+    default_value: string;
 }
 
 export interface OpInstanceConfig {
-    id: string;  // Pattern: ^[a-zA-Z0-9_]+$
+    id: string;
     op: string;
     inputs: OpIO[];
     outputs: OpIO[];
-    attributes: Record<string, any>;
-    dynamicAttributes: Record<string, OpDynamicAttribute>;
+    attributes: Record<string, unknown>;
+    dynamic_attributes: Record<string, OpDynamicAttribute>;
 }
 
-export interface DeviceConfig {
-    accelerator: string;
-    device_config?: Record<string, any>;
+export interface ONNXOpset {
+    domain: string;
+    version: number;
 }
 
-export interface DeviceMap {
-    accelerator: string;
-    node_device_map: Record<string, Record<string, any>>;
-    variant_device_config?: Record<string, any> | string;
-}
-
-export interface TarFileContent {
-    relpath: string;
-    type: "file" | "directory";
-    content: Uint8Array | null;
-    fsPath: string | null;
+export interface ONNXAttributes {
+    opsets: ONNXOpset[];
+    has_external_data: boolean;
+    onnx_ir_version: number;
+    used_operators?: Record<string, string[]> | null;
 }
 
 export interface MetaEntry {
@@ -89,6 +81,5 @@ export interface MetaEntry {
     producer: string;
     producer_version: string;
     producer_tags: string[];
-    payload: Record<string, any>;
+    payload: Record<string, unknown>;
 }
-

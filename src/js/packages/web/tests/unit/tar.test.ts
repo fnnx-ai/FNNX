@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { InvalidTarError, UnsafeTarMemberError } from "@fnnx-ai/common";
 import { TarExtractor } from "../../src/tar";
 
 function computeChecksum(view: Uint8Array): string {
@@ -140,7 +141,7 @@ describe("TarExtractor", () => {
             view.set(encoder.encode("0"), 156);
 
             const extractor = new TarExtractor(buffer);
-            expect(() => extractor.extract()).toThrow("Invalid header");
+            expect(() => extractor.extract()).toThrowError(InvalidTarError);
         });
 
         it("should throw error when file extends beyond buffer", () => {
@@ -160,6 +161,38 @@ describe("TarExtractor", () => {
     });
 
     describe("Edge cases", () => {
+        it("keeps only the last occurrence of a repeated member", () => {
+            const firstHeader = createTarHeader("same.txt", 5, 0x30);
+            const firstData = new Uint8Array(512);
+            firstData.set(new TextEncoder().encode("first"));
+            const secondHeader = createTarHeader("same.txt", 6, 0x30);
+            const secondData = new Uint8Array(512);
+            secondData.set(new TextEncoder().encode("second"));
+            const extractor = new TarExtractor(
+                buildTarBuffer([firstHeader, firstData, secondHeader, secondData])
+            );
+
+            const files = extractor.extract();
+
+            expect(files).toHaveLength(1);
+            expect(new TextDecoder().decode(files[0].content)).toBe("second");
+            expect(extractor.scan().get("same.txt")).toEqual([1536, 6]);
+        });
+
+        it("rejects parent-directory paths", () => {
+            const header = createTarHeader("../outside.txt", 0, 0x30);
+            const extractor = new TarExtractor(buildTarBuffer([header]));
+
+            expect(() => extractor.extract()).toThrowError(UnsafeTarMemberError);
+        });
+
+        it("rejects symbolic links", () => {
+            const header = createTarHeader("link.txt", 0, 0x32);
+            const extractor = new TarExtractor(buildTarBuffer([header]));
+
+            expect(() => extractor.extract()).toThrowError(UnsafeTarMemberError);
+        });
+
         it("should handle files with null bytes in name", () => {
             const tarBuffer = createMockTarFile("test.txt", "content");
             const extractor = new TarExtractor(tarBuffer);

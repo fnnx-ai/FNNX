@@ -1,10 +1,20 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import {
+    mkdtempSync,
+    mkdirSync,
+    writeFileSync,
+    readFileSync,
+    existsSync,
+    rmSync,
+    symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import { create as tarCreate, extract as tarExtract } from "tar";
+import { create as tarCreate } from "tar";
+import {
+    extractTarBufferToDirectory,
+    extractTarFileToDirectory,
+} from "../src/source";
 
 const tempDirs: string[] = [];
 
@@ -20,9 +30,25 @@ function writeFile(dir: string, relpath: string, content: string): void {
     writeFileSync(fullPath, content);
 }
 
-async function extractBufferToDir(tarBuffer: Buffer, targetDir: string): Promise<void> {
-    const readable = Readable.from(tarBuffer);
-    await pipeline(readable, tarExtract({ C: targetDir }));
+function createRawTarEntry(memberPath: string, content: string): Buffer {
+    const encoder = new TextEncoder();
+    const contentBytes = encoder.encode(content);
+    const entry = new Uint8Array(512 + Math.ceil(contentBytes.length / 512) * 512 + 1024);
+    entry.set(encoder.encode(memberPath), 0);
+    entry.set(encoder.encode("0000644"), 100);
+    entry.set(encoder.encode("0000000"), 108);
+    entry.set(encoder.encode("0000000"), 116);
+    entry.set(encoder.encode(contentBytes.length.toString(8).padStart(11, "0")), 124);
+    entry.set(encoder.encode("00000000000"), 136);
+    entry.set(encoder.encode("        "), 148);
+    entry.set(encoder.encode("0"), 156);
+    let checksum = 0;
+    for (let index = 0; index < 512; index++) {
+        checksum += entry[index];
+    }
+    entry.set(encoder.encode(checksum.toString(8).padStart(6, "0") + "\0 "), 148);
+    entry.set(contentBytes, 512);
+    return Buffer.from(entry);
 }
 
 describe("Tar extraction with long file names", () => {
@@ -46,7 +72,7 @@ describe("Tar extraction with long file names", () => {
         await tarCreate({ file: tarPath, C: sourceDir }, ["."]);
 
         const extractDir = makeTempDir();
-        await tarExtract({ file: tarPath, C: extractDir });
+        await extractTarFileToDirectory(tarPath, extractDir);
 
         expect(existsSync(path.join(extractDir, longPath))).toBe(true);
         expect(readFileSync(path.join(extractDir, longPath), "utf-8")).toBe("long path content");
@@ -66,7 +92,7 @@ describe("Tar extraction with long file names", () => {
 
         const tarBuffer = readFileSync(tarPath);
         const extractDir = makeTempDir();
-        await extractBufferToDir(tarBuffer, extractDir);
+        await extractTarBufferToDirectory(tarBuffer, extractDir);
 
         expect(existsSync(path.join(extractDir, longPath))).toBe(true);
         expect(readFileSync(path.join(extractDir, longPath), "utf-8")).toBe('{"key":"value"}');
@@ -85,7 +111,7 @@ describe("Tar extraction with long file names", () => {
 
         const tarBuffer = readFileSync(tarPath);
         const extractDir = makeTempDir();
-        await extractBufferToDir(tarBuffer, extractDir);
+        await extractTarBufferToDirectory(tarBuffer, extractDir);
 
         expect(existsSync(path.join(extractDir, longPath))).toBe(true);
         expect(readFileSync(path.join(extractDir, longPath), "utf-8")).toBe("very deep content");
@@ -103,7 +129,7 @@ describe("Tar extraction with long file names", () => {
 
         const tarBuffer = readFileSync(tarPath);
         const extractDir = makeTempDir();
-        await extractBufferToDir(tarBuffer, extractDir);
+        await extractTarBufferToDirectory(tarBuffer, extractDir);
 
         expect(existsSync(path.join(extractDir, longPath))).toBe(true);
         expect(readFileSync(path.join(extractDir, longPath), "utf-8")).toBe("unicode content");
@@ -124,9 +150,40 @@ describe("Tar extraction with long file names", () => {
 
         const tarBuffer = readFileSync(tarPath);
         const extractDir = makeTempDir();
-        await extractBufferToDir(tarBuffer, extractDir);
+        await extractTarBufferToDirectory(tarBuffer, extractDir);
 
         expect(readFileSync(path.join(extractDir, file1), "utf-8")).toBe("weights data");
         expect(readFileSync(path.join(extractDir, file2), "utf-8")).toBe('{"layers": 3}');
+    });
+
+    it("rejects symbolic links", async () => {
+        const sourceDir = makeTempDir();
+        writeFile(sourceDir, "target.txt", "target");
+        symlinkSync("target.txt", path.join(sourceDir, "link.txt"));
+        const tarPath = path.join(makeTempDir(), "links.tar");
+        await tarCreate({ file: tarPath, C: sourceDir }, ["."]);
+        const extractDir = makeTempDir();
+
+        await expect(extractTarFileToDirectory(tarPath, extractDir)).resolves.toBeUndefined();
+        expect(existsSync(path.join(extractDir, "link.txt"))).toBe(false);
+    });
+
+    it("does not extract parent-directory paths", async () => {
+        const parentDirectory = makeTempDir();
+        const extractDirectory = path.join(parentDirectory, "artifact");
+        mkdirSync(extractDirectory);
+        const outsidePath = path.join(parentDirectory, "outside.txt");
+
+        try {
+            await extractTarBufferToDirectory(
+                createRawTarEntry("../outside.txt", "unsafe"),
+                extractDirectory
+            );
+        } catch {
+            // The tar library may reject the archive before its filter ignores the member.
+        }
+
+        expect(existsSync(outsidePath)).toBe(false);
+        expect(existsSync(path.join(extractDirectory, "outside.txt"))).toBe(false);
     });
 });

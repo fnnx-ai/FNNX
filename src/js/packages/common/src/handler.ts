@@ -1,168 +1,131 @@
+import { ArtifactSource } from "./artifact.js";
+import { DtypesManager } from "./dtypes.js";
+import { UnsupportedVariantError } from "./errors.js";
+import { JSONIO, Manifest, NDJSONIO, OpInstanceConfig } from "./interfaces.js";
+import { ArrayDType, NDArray } from "./ndarray.js";
+import { NDContainer } from "./ndcontainer.js";
+import { ConcreteOp } from "./ops/base.js";
+import Registry from "./registry.js";
+import { BaseVariant, ConcreteVariant } from "./variants/base.js";
+import { Pipeline } from "./variants/pipeline.js";
 
-import { BaseVariant, ConcreteVariant } from './variants/base';
-import { ConcreteOp } from './ops/base';
-import Registry from './registry';
-import { NDArray, ArrayDType, DtypesManager, NDContainer } from './ndarray';
-import { Manifest, OpInstanceConfig, PipelineVariant, DeviceMap, JSONI, NDJSON, TarFileContent } from './interfaces';
-import { Pipeline } from './variants/pipeline';
+export type DynamicAttributes = Record<string, string>;
+export type Inputs = Record<string, unknown>;
+export type Outputs = Record<string, unknown>;
 
-
-export type DynamicAttributes = Record<string, any>;
-export type Inputs = Record<string, any>;
-export type Outputs = Record<string, any>;
-
-interface HandlerConfig {
+export interface HandlerConfig {
     operators: Record<string, ConcreteOp>;
 }
 
-
 export class LocalHandler {
-    private manifest: Manifest;
-    private ops: OpInstanceConfig[];
-    private variantConfig: Record<string, any>;
-    private dtypesManager: DtypesManager;
-    private variant: string;
-    private vrt: BaseVariant;
-    private inputSpecs: Record<string, NDJSON | JSONI>;
-    private outputSpecs: Record<string, NDJSON | JSONI>;
-    private modelContent: TarFileContent[];
+    private readonly dtypesManager: DtypesManager;
+    private readonly variant: string;
+    private readonly runtimeVariant: BaseVariant;
+    private readonly inputSpecs: Record<string, NDJSONIO | JSONIO>;
+    private readonly outputSpecs: Record<string, NDJSONIO | JSONIO>;
 
     constructor(
-        modelContent: TarFileContent[],
+        source: ArtifactSource,
         manifest: Manifest,
         ops: OpInstanceConfig[],
-        variantConfig: PipelineVariant,
+        variantConfig: Record<string, unknown>,
         dtypesManager: DtypesManager,
-        deviceMap: DeviceMap,
         handlerConfig: HandlerConfig
     ) {
-        this.modelContent = modelContent;
-        this.manifest = manifest;
-        this.ops = ops;
-        this.variantConfig = variantConfig;
         this.dtypesManager = dtypesManager;
         this.variant = manifest.variant;
-
-        // Create lookup maps for specs
-        this.inputSpecs = Object.fromEntries(
-            manifest.inputs.map(spec => [spec.name, spec])
-        );
-        this.outputSpecs = Object.fromEntries(
-            manifest.outputs.map(spec => [spec.name, spec])
-        );
-
-        const registry = new Registry(handlerConfig.operators);
+        this.inputSpecs = Object.fromEntries(manifest.inputs.map((spec) => [spec.name, spec]));
+        this.outputSpecs = Object.fromEntries(manifest.outputs.map((spec) => [spec.name, spec]));
 
         let VariantClass: ConcreteVariant;
-        if (this.variant === 'pipeline') {
+        if (this.variant === "pipeline") {
             VariantClass = Pipeline;
-        } else if (this.variant === 'pyfunc') {
-            throw new Error('pyfunc variant is not supported in JavaScript');
         } else {
-            throw new Error(`Unknown variant: ${this.variant}`);
+            throw new UnsupportedVariantError(this.variant);
         }
-
-        this.vrt = new VariantClass(
-            this.modelContent,
+        this.runtimeVariant = new VariantClass(
+            source,
             ops,
             variantConfig,
-            {
-                registry,
-                deviceMap,
-                dtypesManager
-            }
-        )
+            new Registry(handlerConfig.operators),
+            dtypesManager
+        );
     }
 
-    public async warmup(): Promise<void> {
-        await this.vrt.warmup();
+    warmup(): Promise<BaseVariant> {
+        return this.runtimeVariant.warmup();
     }
 
     private parseArrayDtype(dtype: string): ArrayDType {
-        // Extract dtype from Array[dtype] format
         const match = dtype.match(/^Array\[(.+)\]$/);
         if (!match) {
             throw new Error(`Invalid Array dtype format: ${dtype}`);
         }
-
-        const dtypeStr = match[1];
-        switch (dtypeStr) {
-            case 'float32':
-                return ArrayDType.Float32;
-            case 'int32':
-                return ArrayDType.Int32;
-            case 'int64':
-                return ArrayDType.Int64;
-            case 'string':
-                return ArrayDType.String;
-            case 'bool':
-                return ArrayDType.Bool;
-            default:
-                throw new Error(`Unsupported Array dtype: ${dtypeStr}`);
+        const dtypes: Record<string, ArrayDType> = {
+            float32: ArrayDType.Float32,
+            int32: ArrayDType.Int32,
+            int64: ArrayDType.Int64,
+            string: ArrayDType.String,
+            bool: ArrayDType.Bool,
+        };
+        const arrayDtype = dtypes[match[1]];
+        if (!arrayDtype) {
+            throw new Error(`Unsupported Array dtype: ${match[1]}`);
         }
+        return arrayDtype;
     }
 
     private prepareInputs(inputs: Inputs): Inputs {
         const preparedInputs: Inputs = {};
-
         for (const [name, input] of Object.entries(inputs)) {
             const spec = this.inputSpecs[name];
             if (!spec) {
                 throw new Error(`Unknown input: ${name}`);
             }
-
-            if (spec.content_type === 'NDJSON') {
-                if (spec.dtype.startsWith('NDContainer[')) {
-                    if (input instanceof NDContainer) {
-                        preparedInputs[name] = input;
-                    } else {
-                        preparedInputs[name] = new NDContainer(
-                            input,
-                            spec.dtype,
-                            this.dtypesManager
-                        );
-                    }
-                } else if (spec.dtype.startsWith('Array[')) {
+            if (spec.content_type === "NDJSON") {
+                if (spec.dtype.startsWith("NDContainer[")) {
+                    preparedInputs[name] =
+                        input instanceof NDContainer
+                            ? input
+                            : new NDContainer(input, spec.dtype, this.dtypesManager);
+                } else if (spec.dtype.startsWith("Array[")) {
                     if (!(input instanceof NDArray)) {
                         throw new Error(`Input ${name} must be an NDArray`);
-                    } else {
-                        const arrayDtype = this.parseArrayDtype(spec.dtype);
-                        if (input.getDType() !== arrayDtype) {
-                            throw new Error(`Input dtype mismatch for ${name}. Expected ${arrayDtype}, got ${input.getDType()}`);
-                        }
-                        preparedInputs[name] = input;
                     }
+                    const expectedDtype = this.parseArrayDtype(spec.dtype);
+                    if (input.getDType() !== expectedDtype) {
+                        throw new Error(
+                            `Input dtype mismatch for ${name}. Expected ${expectedDtype}, got ${input.getDType()}`
+                        );
+                    }
+                    preparedInputs[name] = input;
                 } else {
-                    throw new Error(`Invalid NDJSON dtype: ${spec.dtype}. Must be Array[...] or NDContainer[...]`);
+                    throw new Error(`Invalid NDJSON dtype: ${spec.dtype}`);
                 }
-            } else if (spec.content_type === 'JSON') {
-                if (this.variant === 'pipeline') {
-                    throw new Error('Pipeline variant does not support JSON inputs');
+            } else if (spec.content_type === "JSON") {
+                if (this.variant === "pipeline") {
+                    throw new Error("Pipeline variant does not support JSON inputs");
                 }
-                const dtype = spec.dtype;
-                this.dtypesManager.validateJsonSchema(dtype, input);
+                this.dtypesManager.validateJsonSchema(spec.dtype, input as Record<string, unknown>);
                 preparedInputs[name] = input;
-            } else {
-                throw new Error(`Unknown content type: ${spec["content_type"]}`);
             }
         }
-
         return preparedInputs;
     }
 
     private prepareOutputs(outputs: Outputs): Outputs {
         return Object.fromEntries(
             Object.keys(this.outputSpecs)
-                .map(key => [key, outputs[key]])
-                .filter(([_, value]) => value !== undefined)
+                .map((name) => [name, outputs[name]])
+                .filter((entry) => entry[1] !== undefined)
         );
     }
 
     async compute(inputs: Inputs, dynamicAttributes: DynamicAttributes = {}): Promise<Outputs> {
-        const res = await this.vrt.compute(
+        const result = await this.runtimeVariant.compute(
             this.prepareInputs(inputs),
             dynamicAttributes
         );
-        return this.prepareOutputs(res);
+        return this.prepareOutputs(result);
     }
 }

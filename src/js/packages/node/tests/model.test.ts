@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extract as tarExtract } from "tar";
-import { Model } from "../src/model";
-import { NDArray } from "@fnnx-ai/common";
+import { Model, NDArray } from "../src/index";
+import { ModelNotWarmedUpError } from "@fnnx-ai/common";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,8 +103,8 @@ describe("Model", () => {
         it("should throw error when computing before warmup", async () => {
             const freshModel = await Model.fromPath(MODEL_PATH);
             const input = new NDArray([1, 3], new Float32Array([1.0, 2.0, 3.0]), "float32");
-            await expect(freshModel.compute({ x: input }, {})).rejects.toThrow(
-                "Model handler is not initialized"
+            await expect(freshModel.compute({ x: input }, {})).rejects.toThrowError(
+                ModelNotWarmedUpError
             );
             freshModel.cleanup();
         });

@@ -1,7 +1,13 @@
-type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
-type JsonObject = { [key: string]: JsonValue };
-type JsonPatchOp = { op: string; path: string; value?: JsonValue };
-type JsonPatch = JsonPatchOp[];
+export type JsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | { [key: string]: JsonValue }
+    | JsonValue[];
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonPatchOp = { op: string; path: string; value?: JsonValue };
+export type JsonPatch = JsonPatchOp[];
 
 function decodePointerToken(token: string): string {
     return token.replace(/~1/g, "/").replace(/~0/g, "~");
