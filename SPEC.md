@@ -244,5 +244,5 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] JS-owned rule-level fixtures; tests for each rule
 - [x] Write the Python package README
   - [x] `src/python/README.md` per the documentation style: install/extras, runtime usage, Reader, StdIO + env managers, PyfuncBuilder, MLflow converter, compiler CLI
-- [ ] Write the JS package READMEs
-  - [ ] `common`, `node`, and `web` READMEs per the documentation style; bump versions if not yet done in the restructure task
+- [x] Write the JS package READMEs
+  - [x] `common`, `node`, and `web` READMEs per the documentation style; bump versions if not yet done in the restructure task

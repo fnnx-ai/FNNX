@@ -1,6 +1,11 @@
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
+from fnnx.device import DeviceMap
 from fnnx.dtypes import BUILTINS, DtypesManager, NDContainer
+from fnnx.handlers.local import LocalHandler, LocalHandlerConfig
 
 
 class TestDtypesManager(unittest.TestCase):
@@ -71,6 +76,34 @@ class TestDtypesManager(unittest.TestCase):
         for name in reserved_names:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 DtypesManager({name: {}}, {})
+
+    def test_artifact_load_rejects_boolean_dtype_redefinition(self) -> None:
+        documents = {
+            "manifest.json": {
+                "variant": "pipeline",
+                "producer_name": "tests",
+                "producer_version": "1.0",
+                "producer_tags": [],
+                "inputs": [],
+                "outputs": [],
+                "dynamic_attributes": [],
+                "env_vars": [],
+            },
+            "ops.json": [],
+            "variant_config.json": {"nodes": []},
+            "dtypes.json": {"boolean": {}},
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            artifact = Path(temporary_directory)
+            for filename, document in documents.items():
+                (artifact / filename).write_text(json.dumps(document), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "boolean"):
+                LocalHandler(
+                    str(artifact),
+                    DeviceMap(accelerator="cpu", node_device_map={}),
+                    LocalHandlerConfig(auto_cleanup=False),
+                )
 
 
 class TestNDContainer(unittest.TestCase):
