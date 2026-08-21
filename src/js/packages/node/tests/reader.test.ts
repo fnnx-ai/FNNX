@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -234,6 +234,49 @@ describe("Model reader: manifest patches", () => {
         expect(model.getManifest().description).toBe("last manifest");
         expect(model.getMetadata().map((entry) => entry.id)).toEqual(["last"]);
         model.cleanup();
+    });
+
+    it("applies ordered patches and tolerates malformed metadata in a local tar fixture", async () => {
+        const patchB = [{ op: "replace", path: "/description", value: "patch-b" }];
+        const patchA = [{ op: "replace", path: "/description", value: "patch-a" }];
+        const metadata = (id: string): object => ({
+            id,
+            producer: "tests",
+            producer_version: "1",
+            producer_tags: [],
+            payload: {},
+        });
+        const tar = createMultiFileTar([
+            ...makeBaseFiles({ meta: [metadata("base")] }),
+            { name: "manifest-b.patch.json", content: JSON.stringify(patchB) },
+            { name: "manifest-a.patch.json", content: JSON.stringify(patchA) },
+            { name: "meta-b.json", content: JSON.stringify([metadata("b")]) },
+            {
+                name: "meta-a.json",
+                content: JSON.stringify([
+                    {
+                        id: "invalid",
+                        producer_version: "1",
+                        producer_tags: [],
+                        payload: {},
+                    },
+                    metadata("a"),
+                ]),
+            },
+            { name: "meta-bad.json", content: "{" },
+        ]);
+        const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        let model: Model | undefined;
+        try {
+            model = await Model.fromBuffer(Buffer.from(tar));
+
+            expect(model.getManifest().description).toBe("patch-b");
+            expect(model.getMetadata().map((entry) => entry.id)).toEqual(["base", "a", "b"]);
+            expect(warning).toHaveBeenCalledWith(expect.stringContaining("meta-bad.json"));
+        } finally {
+            model?.cleanup();
+            warning.mockRestore();
+        }
     });
 
     it("should replace a nested value in inputs via patch", async () => {

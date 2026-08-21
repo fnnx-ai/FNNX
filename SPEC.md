@@ -237,11 +237,11 @@ Unless marked Python-only or JS-only, each scenario applies to both implementati
   - [x] Nested↔flat NDJSON codec with shape validation, non-finite string handling, exact integers (including `int64` serialization)
   - [x] FNNX JSON Schema subset validator replacing the `required`-only stub
   - [x] Tests: all six element types, four scalars, codec round-trips, validator keyword coverage
-- [ ] Align JS pipeline and reading semantics with the spec
-  - [ ] Load-time pipeline graph validation; unbound-input and missing-output errors; JSON content type rejection
-  - [ ] Byte-order filename sorting for patches and sidecars; metadata order and tolerance
-  - [ ] Live dynamic-attribute resolution (wire field names) with required-attribute verification
-  - [ ] JS-owned rule-level fixtures; tests for each rule
+- [x] Align JS pipeline and reading semantics with the spec
+  - [x] Load-time pipeline graph validation; unbound-input and missing-output errors; JSON content type rejection
+  - [x] Byte-order filename sorting for patches and sidecars; metadata order and tolerance
+  - [x] Live dynamic-attribute resolution (wire field names) with required-attribute verification
+  - [x] JS-owned rule-level fixtures; tests for each rule
 - [ ] Write the Python package README
   - [ ] `src/python/README.md` per the documentation style: install/extras, runtime usage, Reader, StdIO + env managers, PyfuncBuilder, MLflow converter, compiler CLI
 - [ ] Write the JS package READMEs

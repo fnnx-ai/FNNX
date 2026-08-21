@@ -7,7 +7,7 @@ import { NDContainer } from "./ndcontainer.js";
 import { ConcreteOp } from "./ops/base.js";
 import Registry from "./registry.js";
 import { BaseVariant, ConcreteVariant } from "./variants/base.js";
-import { Pipeline } from "./variants/pipeline.js";
+import { Pipeline, validatePipeline } from "./variants/pipeline.js";
 
 export type DynamicAttributes = Record<string, string>;
 export type Inputs = Record<string, unknown>;
@@ -39,6 +39,7 @@ export class LocalHandler {
 
         let VariantClass: ConcreteVariant;
         if (this.variant === "pipeline") {
+            validatePipeline(manifest, ops, variantConfig);
             VariantClass = Pipeline;
         } else {
             throw new UnsupportedVariantError(this.variant);
@@ -115,11 +116,17 @@ export class LocalHandler {
     }
 
     private prepareOutputs(outputs: Outputs): Outputs {
-        return Object.fromEntries(
-            Object.keys(this.outputSpecs)
-                .map((name) => [name, outputs[name]])
-                .filter((entry) => entry[1] !== undefined)
-        );
+        const preparedOutputs: [string, unknown][] = [];
+        for (const name of Object.keys(this.outputSpecs)) {
+            if (
+                !Object.prototype.hasOwnProperty.call(outputs, name) ||
+                outputs[name] === undefined
+            ) {
+                throw new Error(`Declared output \`${name}\` is missing`);
+            }
+            preparedOutputs.push([name, outputs[name]]);
+        }
+        return Object.fromEntries(preparedOutputs);
     }
 
     async compute(inputs: Inputs, dynamicAttributes: DynamicAttributes = {}): Promise<Outputs> {

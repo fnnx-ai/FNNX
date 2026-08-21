@@ -1,11 +1,73 @@
 import { ArtifactSource } from "../artifact.js";
 import { DtypesManager } from "../dtypes.js";
 import { OperationInstanceError } from "../errors.js";
-import { OpInstanceConfig, OpIO, PipelineVariant } from "../interfaces.js";
+import { Manifest, OpInstanceConfig, OpIO, PipelineVariant } from "../interfaces.js";
 import { BaseOp } from "../ops/base.js";
 import Registry from "../registry.js";
 import { BaseVariant } from "./base.js";
 import { DagComponent, dagCompute } from "./common/dag.js";
+
+export function validatePipeline(
+    manifest: Manifest,
+    ops: OpInstanceConfig[],
+    variantConfig: Record<string, unknown>
+): void {
+    for (const [entryKind, entries] of [
+        ["input", manifest.inputs],
+        ["output", manifest.outputs],
+    ] as const) {
+        for (const entry of entries) {
+            if (entry.content_type === "JSON") {
+                throw new Error(
+                    `Pipeline ${entryKind} \`${entry.name}\` cannot use JSON content type`
+                );
+            }
+        }
+    }
+
+    const opInstances = new Map(ops.map((instance) => [instance.id, instance]));
+    const boundNames = new Set<string>();
+    for (const input of manifest.inputs) {
+        if (boundNames.has(input.name)) {
+            throw new Error(`Pipeline input \`${input.name}\` binds a value more than once`);
+        }
+        boundNames.add(input.name);
+    }
+
+    const config = variantConfig as unknown as PipelineVariant;
+    for (const [nodeIndex, node] of config.nodes.entries()) {
+        const nodeName = `Pipeline node ${nodeIndex} (\`${node.op_instance_id}\`)`;
+        const opInstance = opInstances.get(node.op_instance_id);
+        if (!opInstance) {
+            throw new Error(
+                `${nodeName} references undeclared op instance \`${node.op_instance_id}\``
+            );
+        }
+
+        for (const ioKind of ["inputs", "outputs"] as const) {
+            const nodeArity = node[ioKind].length;
+            const opArity = opInstance[ioKind].length;
+            if (nodeArity !== opArity) {
+                throw new Error(
+                    `${nodeName} has ${ioKind.slice(0, -1)} arity ${nodeArity}, but op ` +
+                        `instance \`${node.op_instance_id}\` declares ${opArity}`
+                );
+            }
+        }
+
+        for (const inputName of node.inputs) {
+            if (!boundNames.has(inputName)) {
+                throw new Error(`${nodeName} consumes unbound input \`${inputName}\``);
+            }
+        }
+        for (const outputName of node.outputs) {
+            if (boundNames.has(outputName)) {
+                throw new Error(`${nodeName} binds value \`${outputName}\` more than once`);
+            }
+            boundNames.add(outputName);
+        }
+    }
+}
 
 class PipelineNodeInstance implements DagComponent {
     readonly operator: BaseOp;

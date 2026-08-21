@@ -84,7 +84,7 @@ export class Model {
         const patchNames = source
             .listRootMembers()
             .filter((name) => MANIFEST_PATCH_PATTERN.test(name))
-            .sort();
+            .sort(compareUtf8ByteOrder);
         const patches = patchNames.map((name) => {
             const patch = parseJsonFile(source, name);
             if (!Array.isArray(patch)) {
@@ -97,10 +97,33 @@ export class Model {
 
     private loadMetadata(source: ArtifactSource): MetaEntry[] {
         const entries: MetaEntry[] = [];
-        for (const name of source.listRootMembers().filter((item) => META_PATTERN.test(item))) {
-            const value = parseJsonFile(source, name);
-            if (Array.isArray(value)) {
-                entries.push(...(value as unknown as MetaEntry[]));
+        const matchingNames = source.listRootMembers().filter((name) => META_PATTERN.test(name));
+        const sidecarNames = matchingNames
+            .filter((name) => name !== "meta.json")
+            .sort(compareUtf8ByteOrder);
+        const metadataNames = matchingNames.includes("meta.json")
+            ? ["meta.json", ...sidecarNames]
+            : sidecarNames;
+
+        for (const name of metadataNames) {
+            let value: JsonValue;
+            try {
+                value = parseJsonFile(source, name);
+            } catch (error) {
+                if (!(error instanceof InvalidArtifactFileError)) {
+                    throw error;
+                }
+                console.warn(`Ignoring unparseable metadata file \`${name}\`: ${error.message}`);
+                continue;
+            }
+            if (!Array.isArray(value)) {
+                console.warn(`Ignoring metadata file \`${name}\` because it is not a JSON array`);
+                continue;
+            }
+            for (const entry of value) {
+                if (isMetaEntry(entry)) {
+                    entries.push(entry as unknown as MetaEntry);
+                }
             }
         }
         return entries;
@@ -136,6 +159,31 @@ function parseJsonFile(source: ArtifactSource, path: string): JsonValue {
 
 function isObject(value: JsonValue): value is JsonObject {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isMetaEntry(value: JsonValue): boolean {
+    return (
+        isObject(value) &&
+        typeof value.id === "string" &&
+        typeof value.producer === "string" &&
+        typeof value.producer_version === "string" &&
+        Array.isArray(value.producer_tags) &&
+        value.producer_tags.every((tag) => typeof tag === "string") &&
+        isObject(value.payload)
+    );
+}
+
+function compareUtf8ByteOrder(left: string, right: string): number {
+    const encoder = new TextEncoder();
+    const leftBytes = encoder.encode(left);
+    const rightBytes = encoder.encode(right);
+    const sharedLength = Math.min(leftBytes.length, rightBytes.length);
+    for (let index = 0; index < sharedLength; index++) {
+        if (leftBytes[index] !== rightBytes[index]) {
+            return leftBytes[index] - rightBytes[index];
+        }
+    }
+    return leftBytes.length - rightBytes.length;
 }
 
 function cloneJson<T>(value: T): T {
