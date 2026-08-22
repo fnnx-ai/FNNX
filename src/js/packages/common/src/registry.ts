@@ -1,14 +1,9 @@
-import { BaseOp, ConcreteOp } from './ops/base';
+import { ConcreteOp } from "./ops/base.js";
 
 export default class Registry {
-    private ops: Record<string, ConcreteOp>;
+    constructor(private readonly ops: Record<string, ConcreteOp>) {}
 
-    constructor(ops: Record<string, ConcreteOp>) {
-        this.ops = ops;
-    }
-
-    public getOp(name: string): ConcreteOp {
+    getOp(name: string): ConcreteOp | undefined {
         return this.ops[name];
     }
 }
-

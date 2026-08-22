@@ -1,33 +1,44 @@
 from __future__ import annotations
 
 import atexit
-from fnnx.handlers.stdio.client import StdIOClient
+import json
+import os
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from os.path import abspath
+from os.path import join as pjoin
+from shutil import rmtree
+from typing import Any
+
+from fnnx.artifact import io_specs_by_name, load_effective_manifest, load_root_json
+from fnnx.device import DeviceMap
+from fnnx.dtypes import (
+    BUILTINS,
+    DtypesManager,
+    NDContainer,
+    decode_nonfinite_float_strings,
+    encode_nonfinite_floats,
+)
+from fnnx.envs.base import BaseEnvManager
+from fnnx.envs.conda import CondaLikeEnvManager
+from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
 from fnnx.handlers._common import unpack_model
+from fnnx.handlers.stdio.client import StdIOClient
+from fnnx.utils import to_thread
 from fnnx.validators.model_schema import (
     validate_manifest,
     validate_op_instances,
     validate_variant,
 )
-from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
-from fnnx.device import DeviceMap
-from fnnx.dtypes import BUILTINS, DtypesManager, NDContainer
-from fnnx.envs.base import BaseEnvManager
-from fnnx.envs.conda import CondaLikeEnvManager
-from fnnx.utils import to_thread
-
-import os
-from os.path import abspath, join as pjoin
-from dataclasses import dataclass
-import json
-from shutil import rmtree
-from concurrent.futures import ThreadPoolExecutor
+from fnnx.variants.pipeline import validate_pipeline
 
 try:
     import numpy as np  # type: ignore
 except Exception:  # pragma: no cover
-    np = None
+    np = None  # type: ignore[assignment]
 
 WORKER_PATH = pjoin(abspath(os.path.dirname(__file__)), "worker.py")
+_ENVIRONMENT_KIND = "python3::conda_pip"
 
 
 @dataclass
@@ -57,30 +68,32 @@ class StdIOHandler(BaseHandler):
         if self.cleanup:
             atexit.register(lambda: _cleanup(self.model_path))
 
-        with open(pjoin(self.model_path, "manifest.json"), "r") as f:
-            self.manifest = json.load(f)
-            validate_manifest(self.manifest)
-            self.input_specs = {i["name"]: i for i in self.manifest["inputs"]}
-            self.output_specs = {o["name"]: o for o in self.manifest["outputs"]}
+        self.manifest = load_effective_manifest(self.model_path)
+        validate_manifest(self.manifest)
+        self.input_specs = io_specs_by_name(self.manifest["inputs"], "input")
+        self.output_specs = io_specs_by_name(self.manifest["outputs"], "output")
 
-        with open(pjoin(self.model_path, "ops.json"), "r") as f:
-            self.ops = json.load(f)
-            validate_op_instances(self.ops)
+        self.ops = load_root_json(self.model_path, "ops.json")
+        validate_op_instances(self.ops)
 
-        with open(pjoin(self.model_path, "variant_config.json"), "r") as f:
-            self.variant_config = json.load(f)
-            validate_variant(self.manifest["variant"], self.variant_config)
+        self.variant_config = load_root_json(self.model_path, "variant_config.json")
+        validate_variant(self.manifest["variant"], self.variant_config)
+        if self.manifest["variant"] == "pipeline":
+            validate_pipeline(self.manifest, self.ops, self.variant_config)
 
-        with open(pjoin(self.model_path, "dtypes.json"), "r") as f:
-            external_dtypes = json.load(f)
-            self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
+        external_dtypes = load_root_json(self.model_path, "dtypes.json")
+        self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
 
-        env_spec_path = pjoin(self.model_path, "env.json")
-        raw_env_spec: dict = {}
-        if os.path.exists(env_spec_path):
-            with open(env_spec_path, "r") as f:
-                raw_env_spec = json.load(f)
-        conda_like_spec = raw_env_spec.get("python3::conda_pip", raw_env_spec or {})
+        raw_env_spec: dict[str, Any] = load_root_json(self.model_path, "env.json")
+        if _ENVIRONMENT_KIND not in raw_env_spec:
+            offered_kinds = (
+                ", ".join(f"`{kind}`" for kind in sorted(raw_env_spec)) or "none"
+            )
+            raise RuntimeError(
+                "Artifact is unsupported by StdIOHandler because it offers no "
+                f"implemented environment kind; offered kinds: {offered_kinds}"
+            )
+        conda_like_spec = raw_env_spec[_ENVIRONMENT_KIND]
 
         if isinstance(self.handler_config.env_manager, str):
             import importlib
@@ -119,12 +132,18 @@ class StdIOHandler(BaseHandler):
 
         self._executor = ThreadPoolExecutor(max_workers=1)
 
-    def _as_np(self, data, spec):
+    def _as_np(self, data: Any, spec: dict[str, Any]) -> Any:
         if np is None:
             raise RuntimeError("You must have numpy installed to use Array dtype")
         dtype = spec["dtype"][6:-1]
         if dtype == "string":
             return np.asarray(data).astype(np.str_)
+        if dtype in {"float32", "float64"}:
+            if isinstance(data, np.ndarray):
+                shape = data.shape
+                data = decode_nonfinite_float_strings(data.tolist())
+                return np.asarray(data).reshape(shape).astype(dtype)
+            data = decode_nonfinite_float_strings(data)
         return np.asarray(data).astype(dtype)
 
     def _inputs_to_wire(self, inputs: dict) -> dict:
@@ -134,11 +153,12 @@ class StdIOHandler(BaseHandler):
             if spec["content_type"] == "NDJSON":
                 if "Array[" in spec["dtype"]:
                     if np is not None and isinstance(val, np.ndarray):
-                        out[name] = val.tolist()
-                    else:
-                        out[name] = val
+                        val = val.tolist()
+                    out[name] = encode_nonfinite_floats(val)
                 elif "NDContainer[" in spec["dtype"]:
-                    out[name] = val.data if isinstance(val, NDContainer) else val
+                    if isinstance(val, NDContainer):
+                        val = val.data
+                    out[name] = encode_nonfinite_floats(val)
                 else:
                     raise ValueError(f"Unknown dtype {spec['dtype']}")
             elif spec["content_type"] == "JSON":
@@ -147,14 +167,20 @@ class StdIOHandler(BaseHandler):
                 raise ValueError(f"Unknown input content_type {spec['content_type']}")
         return out
 
-    def _outputs_from_wire(self, outputs: dict) -> dict:
+    def _outputs_from_wire(self, outputs: dict[str, Any]) -> dict[str, Any]:
+        for name in self.output_specs:
+            if name not in outputs:
+                raise ValueError(f"Missing declared output `{name}`")
+
         prepared = {}
         for name, spec in self.output_specs.items():
-            raw = outputs.get(name)
+            raw = outputs[name]
             if spec["content_type"] == "NDJSON":
                 if "Array[" in spec["dtype"]:
                     prepared[name] = self._as_np(raw, spec)
                 elif "NDContainer[" in spec["dtype"]:
+                    if spec["dtype"] == "NDContainer[float]":
+                        raw = decode_nonfinite_float_strings(raw)
                     prepared[name] = NDContainer(
                         raw, dtype=spec["dtype"], dtypes_manager=self.dtypes_manager
                     )
@@ -166,7 +192,9 @@ class StdIOHandler(BaseHandler):
                 raise ValueError(f"Unknown output content_type {spec['content_type']}")
         return prepared
 
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         wire_inputs = self._inputs_to_wire(inputs)
         res = self._client.request(
             "compute",
@@ -175,7 +203,9 @@ class StdIOHandler(BaseHandler):
         )
         return self._outputs_from_wire(res)
 
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         def _call():
             wire_inputs = self._inputs_to_wire(inputs)
             res = self._client.request(

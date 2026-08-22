@@ -1,62 +1,52 @@
-import { BaseOp, interfaces, DtypesManager, NDArray, ArrayDType } from "@fnnx-ai/common";
+import {
+    ArrayDType,
+    ArtifactFile,
+    MissingArtifactFileError,
+    NDArray,
+    ONNXOpBase,
+    ONNXSession,
+} from "@fnnx-ai/common";
 import * as ort from "onnxruntime-node";
 
-export class ONNXOpV1 extends BaseOp {
-    private modelFilePath: string;
-    private inferenceSession: ort.InferenceSession | null = null;
-    private inputNames: string[] = [];
-    private outputNames: string[] = [];
-
-    constructor(
-        artifacts: interfaces.TarFileContent[],
-        config: {
-            attributes: Record<string, any>;
-            dynamicAttributeMap: Record<string, interfaces.OpDynamicAttribute>;
-            deviceConfig: interfaces.DeviceConfig;
-            inputSpecs: interfaces.OpIO[];
-            outputSpecs: interfaces.OpIO[];
-            dtypesManager: DtypesManager;
-        }) {
-        super(artifacts, config);
-
-        const modelFile = artifacts.find(f => f.relpath.endsWith('model.onnx'));
-        if (!modelFile || !modelFile.fsPath) {
-            throw new Error('Model file not found');
-        }
-        this.modelFilePath = modelFile.fsPath;
+export class ONNXOpV1 extends ONNXOpBase {
+    protected canLoadExternalData(): boolean {
+        return true;
     }
 
-    async warmup(...args: any[]): Promise<this> {
-        this.inferenceSession = await ort.InferenceSession.create(this.modelFilePath);
-        this.inputNames = [...this.inferenceSession.inputNames];
-        this.outputNames = [...this.inferenceSession.outputNames];
-        return this;
-    }
-
-    async compute(inputs: any, dynamicAttributes: any) {
-        if (!this.inferenceSession) {
-            throw new Error('Model not loaded');
+    protected async createSession(
+        modelFile: ArtifactFile,
+        _artifacts: ArtifactFile[]
+    ): Promise<ONNXSession> {
+        if (!modelFile.filesystemPath) {
+            throw new MissingArtifactFileError(modelFile.path);
         }
-        const feeds = Object.fromEntries(
-            this.inputNames.map((name, i) => {
-                const inp = inputs[i].toArray();
-                const dtype = inputs[i].dtype;
-                const shape = inputs[i].shape;
-                return [name, new ort.Tensor(dtype, inp, shape)];
-            })
-        );
-
-        const outputs = await this.inferenceSession.run(feeds);
-        const results = this.outputNames.map(name => {
-            const output = outputs[name];
-            if (!output) {
-                throw new Error(`Output ${name} not found`);
-            }
-            const data = output.data;
-            const shape = [...output.dims];
-            const dtype = output.type;
-            return new NDArray(shape, <any[]>data, <ArrayDType>dtype);
-        })
-        return { value: results, metadata: {} };
+        const session = await ort.InferenceSession.create(modelFile.filesystemPath);
+        return {
+            inputNames: session.inputNames,
+            outputNames: session.outputNames,
+            run: async (inputs: NDArray[]): Promise<NDArray[]> => {
+                const feeds = Object.fromEntries(
+                    session.inputNames.map((name, index) => {
+                        const input = inputs[index];
+                        return [
+                            name,
+                            new ort.Tensor(
+                                input.dtype as ort.Tensor.Type,
+                                input.toArray() as ort.Tensor.DataType,
+                                input.shape
+                            ),
+                        ];
+                    })
+                );
+                const outputs = await session.run(feeds);
+                return session.outputNames.map((name) => {
+                    const output = outputs[name];
+                    if (!output) {
+                        throw new Error(`ONNX output \`${name}\` was not returned`);
+                    }
+                    return new NDArray([...output.dims], output.data, output.type as ArrayDType);
+                });
+            },
+        };
     }
 }

@@ -5,7 +5,7 @@
 
 from pydantic import BaseModel
 from typing import Literal
-from pydantic_models.op_instances import OpInstance
+from fnnx.extras.pydantic_models.op_instances import OpInstance
 
 
 class Opset(BaseModel):
@@ -15,7 +15,6 @@ class Opset(BaseModel):
 
 class ONNXAttributes(BaseModel):
     opsets: list[Opset]
-    requires_ort_extensions: bool
     has_external_data: bool
     onnx_ir_version: int
     used_operators: dict[str, list[str]] | None = None

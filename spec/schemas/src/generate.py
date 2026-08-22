@@ -1,22 +1,24 @@
 import json
-import subprocess
 import os
 import shutil
-from pydantic_models.op_instances import OpInstances
+import subprocess
+from typing import Any
+
+from pydantic_models.envs import Python3_CondaPip
 from pydantic_models.manifest import Manifest
+from pydantic_models.meta import MetaEntry
+from pydantic_models.op_instances import OpInstances
+from pydantic_models.ops.onnx import ONNX_v1
 from pydantic_models.variants.pipeline import PipelineVariant
 from pydantic_models.variants.pyfunc import PyFuncVariant
-from pydantic_models.ops.onnx import ONNX_v1
-from pydantic_models.meta import MetaEntry
-from pydantic_models.envs import Python3_CondaPip
 
-SPEC_VERSION = "0.0.4"
+SPEC_VERSION = "0.1.0"
 
 manifest_json_schema = Manifest.model_json_schema()
 ops_json_schema = OpInstances.model_json_schema()
 meta_entry_json_schema = MetaEntry.model_json_schema()
 
-combined_json_schema = {
+combined_json_schema: dict[str, Any] = {
     "version": SPEC_VERSION,
     "manifest": manifest_json_schema,
     "ops_entries": ops_json_schema,
@@ -74,7 +76,7 @@ spec_py_path = "../../../src/python/fnnx/spec.py"
 with open(spec_py_path, "w") as f:
     f.write("# This file is auto generated and must not be modified manually!\n")
     f.write(f"schema = {combined_json_schema}")
-subprocess.run(["black", spec_py_path])
+subprocess.run(["black", spec_py_path], check=True)
 
 
 HEADER_TEXT = (
@@ -85,7 +87,9 @@ HEADER_TEXT = (
 )
 
 
-def copy_with_header(src_dir, dst_dir, header_text=HEADER_TEXT):
+def copy_with_header(
+    src_dir: str, dst_dir: str, header_text: str = HEADER_TEXT
+) -> None:
     for root, _, files in os.walk(src_dir):
         rel_path = os.path.relpath(root, src_dir)
         dst_root = os.path.join(dst_dir, rel_path)
@@ -98,9 +102,13 @@ def copy_with_header(src_dir, dst_dir, header_text=HEADER_TEXT):
 
                 with open(src_path, "r", encoding="utf-8") as s:
                     original = s.read()
+                    original = original.replace(
+                        "from pydantic_models.",
+                        "from fnnx.extras.pydantic_models.",
+                    )
 
                 with open(dst_path, "w", encoding="utf-8") as d:
-                    d.write(HEADER_TEXT + original)
+                    d.write(header_text + original)
             elif f.endswith(".pyc"):
                 pass
             else:

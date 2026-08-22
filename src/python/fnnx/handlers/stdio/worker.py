@@ -3,14 +3,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import threading
-import os
-from typing import Callable
 from concurrent.futures import ThreadPoolExecutor
-from fnnx.runtime import Runtime
-from fnnx.handlers.local import LocalHandler
+from typing import Any, Callable
+
 from fnnx.device import DeviceMap
+from fnnx.dtypes import encode_nonfinite_floats
+from fnnx.handlers.local import LocalHandler
+from fnnx.runtime import Runtime
 
 try:
     from fnnx.dtypes import NDContainer  # type: ignore
@@ -19,7 +21,7 @@ except Exception:
 try:
     import numpy as _np  # type: ignore
 except Exception:  # pragma: no cover
-    _np = None
+    _np = None  # type: ignore[assignment]
 
 
 class ProtocolWriter:
@@ -69,7 +71,8 @@ class StdIOServer:
                         "body": result,
                         "status": "ok",
                         "type": "fnnx_stdio_response",
-                    }
+                    },
+                    allow_nan=False,
                 ),
             )
         except Exception as e:
@@ -80,7 +83,8 @@ class StdIOServer:
                         "error": f"{str(e.__class__.__name__)}({str(e)})",
                         "status": "error",
                         "type": "fnnx_stdio_response",
-                    }
+                    },
+                    allow_nan=False,
                 ),
             )
 
@@ -109,16 +113,26 @@ def _parse_args():
     return p.parse_args()
 
 
-def _to_jsonable(o):
-    out = {}
+def _to_jsonable(o: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     for k, v in o.items():
         if _np is not None and isinstance(v, _np.ndarray):
-            out[k] = v.tolist()
+            out[k] = encode_nonfinite_floats(v.tolist())
         elif NDContainer is not None and isinstance(v, NDContainer):
-            out[k] = v.data
+            out[k] = encode_nonfinite_floats(v.data)
         else:
             out[k] = v
     return out
+
+
+def _dynamic_attributes_from_body(body: dict[str, Any]) -> dict[str, str]:
+    dynamic_attributes = body.get("dynamic_attributes", {})
+    if not isinstance(dynamic_attributes, dict) or any(
+        not isinstance(name, str) or not isinstance(value, str)
+        for name, value in dynamic_attributes.items()
+    ):
+        raise TypeError("dynamic_attributes must map strings to strings")
+    return dynamic_attributes
 
 
 def main():
@@ -148,16 +162,16 @@ def main():
         cleanup=False,
     )
 
-    def rt_compute(body: dict):
+    def rt_compute(body: dict[str, Any]):
         inputs = body.get("inputs", {})
-        dynamic_attributes = body.get("dynamic_attributes", {}) or {}
+        dynamic_attributes = _dynamic_attributes_from_body(body)
 
         result = runtime.compute(inputs, dynamic_attributes)
         return _to_jsonable(result)
 
-    def rt_compute_async(body: dict):
+    def rt_compute_async(body: dict[str, Any]):
         inputs = body.get("inputs", {})
-        dynamic_attributes = body.get("dynamic_attributes", {}) or {}
+        dynamic_attributes = _dynamic_attributes_from_body(body)
 
         result = loop.run_until_complete(
             runtime.compute_async(inputs, dynamic_attributes)

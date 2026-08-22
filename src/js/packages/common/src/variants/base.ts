@@ -1,10 +1,9 @@
-
-import Registry from '../registry';
-import { BaseOp, ConcreteOp } from '../ops/base';
-import { DeviceConfig, DeviceMap, OpIO, TarFileContent, OpInstanceConfig } from '../interfaces';
-import { DtypesManager } from '../ndarray';
-
-
+import { ArtifactSource } from "../artifact.js";
+import { DtypesManager } from "../dtypes.js";
+import { UnsupportedOperationError } from "../errors.js";
+import { OpInstanceConfig, OpIO } from "../interfaces.js";
+import { BaseOp } from "../ops/base.js";
+import Registry from "../registry.js";
 
 interface OpInstance {
     operator: BaseOp;
@@ -13,69 +12,40 @@ interface OpInstance {
 }
 
 export abstract class BaseVariant {
-    protected modelContent: TarFileContent[];
-    protected registry: Registry;
-    protected dtypesManager: DtypesManager;
-    protected opInstances: Map<string, OpInstance>;
-    protected variantConfig: Record<string, any>;
-    protected deviceMap: DeviceMap;
+    protected readonly dtypesManager: DtypesManager;
+    protected readonly opInstances = new Map<string, OpInstance>();
+    protected readonly variantConfig: Record<string, unknown>;
 
     constructor(
-        modelContent: TarFileContent[],
+        source: ArtifactSource,
         ops: OpInstanceConfig[],
-        variantConfig: Record<string, any>,
-        config: {
-            registry: Registry;
-            deviceMap: DeviceMap;
-            dtypesManager: DtypesManager;
-        }
+        variantConfig: Record<string, unknown>,
+        registry: Registry,
+        dtypesManager: DtypesManager
     ) {
-        this.registry = config.registry;
-        this.dtypesManager = config.dtypesManager;
-        this.opInstances = new Map();
+        this.dtypesManager = dtypesManager;
         this.variantConfig = variantConfig;
-        this.deviceMap = config.deviceMap;
-        this.modelContent = modelContent;
 
         for (const opInstance of ops) {
-            const OpClass = this.registry.getOp(opInstance.op);
-
-            const device = {
-                accelerator: config.deviceMap.accelerator,
-                device_config: config.deviceMap.node_device_map[opInstance.id]
-            };
-
-
-            const operator = new OpClass(
-                this.filterContent(modelContent, opInstance.id),
-                {
-                    attributes: opInstance.attributes || {},
-                    dynamicAttributeMap: opInstance.dynamicAttributes || {},
-                    deviceConfig: device,
-                    inputSpecs: opInstance.inputs,
-                    outputSpecs: opInstance.outputs,
-                    dtypesManager: this.dtypesManager
-                }
-            );
-
-            this.opInstances.set(
-                opInstance.id,
-                {
-                    operator: operator,
-                    inputSpecs: opInstance.inputs,
-                    outputSpecs: opInstance.outputs
-                }
-            );
+            const OpClass = registry.getOp(opInstance.op);
+            if (!OpClass) {
+                throw new UnsupportedOperationError(opInstance.op, opInstance.id);
+            }
+            const operator = new OpClass(source.resolveOpArtifacts(opInstance.id), {
+                op_instance_id: opInstance.id,
+                attributes: opInstance.attributes ?? {},
+                dynamic_attributes: opInstance.dynamic_attributes ?? {},
+                inputs: opInstance.inputs,
+                outputs: opInstance.outputs,
+                dtypes_manager: dtypesManager,
+            });
+            this.opInstances.set(opInstance.id, {
+                operator,
+                inputSpecs: opInstance.inputs,
+                outputSpecs: opInstance.outputs,
+            });
         }
-
-   
     }
-
-    protected filterContent(content: TarFileContent[], opId: string): TarFileContent[] {
-        return content.filter((c) => c.relpath.startsWith(`ops_artifacts/${opId}/`) && c.relpath !== `ops_artifacts/${opId}/`);
-    }
-
-    protected abstract postInit(): void;
 
     async warmup(): Promise<this> {
         for (const instance of this.opInstances.values()) {
@@ -85,17 +55,15 @@ export abstract class BaseVariant {
     }
 
     abstract compute(
-        inputs: Record<string, any>,
-        dynamicAttributes: Record<string, any>
-    ): Promise<Record<string, any>>;
-
+        inputs: Record<string, unknown>,
+        dynamicAttributes: Record<string, string>
+    ): Promise<Record<string, unknown>>;
 }
 
-export type ConcreteVariant = new (modelContent: TarFileContent[],
+export type ConcreteVariant = new (
+    source: ArtifactSource,
     ops: OpInstanceConfig[],
-    variantConfig: Record<string, any>,
-    config: {
-        registry: Registry;
-        deviceMap: DeviceMap;
-        dtypesManager: DtypesManager;
-    }) => BaseVariant;
+    variantConfig: Record<string, unknown>,
+    registry: Registry,
+    dtypesManager: DtypesManager
+) => BaseVariant;

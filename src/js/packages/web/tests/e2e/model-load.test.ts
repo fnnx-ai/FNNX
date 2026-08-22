@@ -19,7 +19,7 @@ const testHTML = `
       "imports": {
         "@fnnx-ai/common": "/dist/common/index.js",
         "@fnnx-ai/web": "/dist/web/index.js",
-        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.mjs"
       }
     }
     </script>
@@ -63,7 +63,7 @@ test.describe('Model Load Test', () => {
       const match = url.pathname.match(/\/dist\/(common|web)\/(.+)$/);
       
       if (!match) {
-        const simplePath = url.pathname.match(/\/dist\/([^\/]+)$/);
+        const simplePath = url.pathname.match(/\/dist\/([^/]+)$/);
         if (simplePath) {
           const fileName = simplePath[1];
           const candidates = [
@@ -396,7 +396,7 @@ test.describe('Model Load Test', () => {
       try {
         await window.Model.fromPath('http://localhost:4173/invalid.tar');
         return { success: true };
-      } catch (e) {
+      } catch {
         return { success: false, hasError: true };
       }
     });

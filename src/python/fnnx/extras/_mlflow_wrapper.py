@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import asdict as dataclass_asdict, is_dataclass
 import os
 import sys
+from typing import Any
 
 from fnnx.variants.pyfunc import PyFunc
 
@@ -130,7 +131,7 @@ class MLflowModel(PyFunc):
         mode = cfg.get("input_mode", "passthrough")
 
         if mode == "columns":
-            import pandas as pd
+            import pandas as pd  # type: ignore[import-untyped]
 
             column_order = cfg.get("column_order") or list(inputs.keys())
             return pd.DataFrame({c: inputs[c] for c in column_order})
@@ -143,7 +144,9 @@ class MLflowModel(PyFunc):
 
         return inputs["data"]
 
-    def compute(self, inputs, dynamic_attributes):
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         payload = self._build_payload(inputs)
 
         param_names = self._cfg.get("param_names") or []
@@ -158,5 +161,7 @@ class MLflowModel(PyFunc):
 
         return {"predictions": _to_jsonable(result)}
 
-    async def compute_async(self, inputs, dynamic_attributes):
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         return self.compute(inputs, dynamic_attributes)

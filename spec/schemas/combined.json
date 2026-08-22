@@ -1,5 +1,5 @@
 {
-    "version": "0.0.4",
+    "version": "0.1.0",
     "manifest": {
         "$defs": {
             "JSON": {
@@ -317,6 +317,7 @@
                         "type": "array"
                     },
                     "attributes": {
+                        "additionalProperties": true,
                         "title": "Attributes",
                         "type": "object"
                     },
@@ -356,6 +357,7 @@
         "type": "object"
     },
     "meta_entry": {
+        "additionalProperties": true,
         "properties": {
             "id": {
                 "title": "Id",
@@ -377,6 +379,7 @@
                 "type": "array"
             },
             "payload": {
+                "additionalProperties": true,
                 "title": "Payload",
                 "type": "object"
             }
@@ -538,10 +541,6 @@
                             "title": "Opsets",
                             "type": "array"
                         },
-                        "requires_ort_extensions": {
-                            "title": "Requires Ort Extensions",
-                            "type": "boolean"
-                        },
                         "has_external_data": {
                             "title": "Has External Data",
                             "type": "boolean"
@@ -571,7 +570,6 @@
                     },
                     "required": [
                         "opsets",
-                        "requires_ort_extensions",
                         "has_external_data",
                         "onnx_ir_version"
                     ],
@@ -756,6 +754,7 @@
                 "extra_values": {
                     "anyOf": [
                         {
+                            "additionalProperties": true,
                             "type": "object"
                         },
                         {

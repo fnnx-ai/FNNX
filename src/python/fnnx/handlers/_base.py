@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from fnnx.device import DeviceMap
 from dataclasses import dataclass
+from typing import Any
+
+from fnnx.device import DeviceMap
 
 
 @dataclass
@@ -15,14 +17,18 @@ class BaseHandler(ABC):
         model_path: str,
         device_map: DeviceMap,
         handler_config: BaseHandlerConfig | None = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         pass
 
     @abstractmethod
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         pass
 
     @abstractmethod
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         pass

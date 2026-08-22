@@ -1,29 +1,88 @@
-import { BaseVariant } from './base';
-import { DagComponent, dagCompute } from './common/dag';
-import { OpIO, TarFileContent, DeviceMap, OpInstanceConfig } from '../interfaces';
-import Registry from '../registry';
-import { DtypesManager, NDContainer } from '../ndarray';
-import { NDArray } from '../ndarray';
-import { BaseOp } from '../ops/base';
+import { ArtifactSource } from "../artifact.js";
+import { DtypesManager } from "../dtypes.js";
+import { InvalidArtifactFileError, OperationInstanceError } from "../errors.js";
+import { Manifest, OpInstanceConfig, OpIO, PipelineVariant } from "../interfaces.js";
+import { BaseOp } from "../ops/base.js";
+import Registry from "../registry.js";
+import { BaseVariant } from "./base.js";
+import { DagComponent, dagCompute } from "./common/dag.js";
+import { validateInputs } from "./common/validators.js";
 
-interface PipelineNode {
-    op_instance_id: string;
-    inputs: string[];
-    outputs: string[];
-    extra_dynattrs?: Record<string, string>;
-}
+export function validatePipeline(
+    manifest: Manifest,
+    ops: OpInstanceConfig[],
+    variantConfig: Record<string, unknown>
+): void {
+    for (const [entryKind, entries] of [
+        ["input", manifest.inputs],
+        ["output", manifest.outputs],
+    ] as const) {
+        for (const entry of entries) {
+            if (entry.content_type !== "NDJSON") {
+                throw new InvalidArtifactFileError(
+                    "manifest.json",
+                    `Pipeline ${entryKind} \`${entry.name}\` requires the NDJSON content type, ` +
+                        `got \`${entry.content_type}\``
+                );
+            }
+        }
+    }
 
-interface PipelineConfig {
-    nodes: PipelineNode[];
+    if (!Array.isArray(variantConfig.nodes)) {
+        throw new InvalidArtifactFileError("variant_config.json", "`nodes` must be an array");
+    }
+
+    const opInstances = new Map(ops.map((instance) => [instance.id, instance]));
+    const boundNames = new Set<string>();
+    for (const input of manifest.inputs) {
+        if (boundNames.has(input.name)) {
+            throw new Error(`Pipeline input \`${input.name}\` binds a value more than once`);
+        }
+        boundNames.add(input.name);
+    }
+
+    const config = variantConfig as unknown as PipelineVariant;
+    for (const [nodeIndex, node] of config.nodes.entries()) {
+        const nodeName = `Pipeline node ${nodeIndex} (\`${node.op_instance_id}\`)`;
+        const opInstance = opInstances.get(node.op_instance_id);
+        if (!opInstance) {
+            throw new Error(
+                `${nodeName} references undeclared op instance \`${node.op_instance_id}\``
+            );
+        }
+
+        for (const ioKind of ["inputs", "outputs"] as const) {
+            const nodeArity = node[ioKind].length;
+            const opArity = opInstance[ioKind].length;
+            if (nodeArity !== opArity) {
+                throw new Error(
+                    `${nodeName} has ${ioKind.slice(0, -1)} arity ${nodeArity}, but op ` +
+                        `instance \`${node.op_instance_id}\` declares ${opArity}`
+                );
+            }
+        }
+
+        for (const inputName of node.inputs) {
+            if (!boundNames.has(inputName)) {
+                throw new Error(`${nodeName} consumes unbound input \`${inputName}\``);
+            }
+        }
+        for (const outputName of node.outputs) {
+            if (boundNames.has(outputName)) {
+                throw new Error(`${nodeName} binds value \`${outputName}\` more than once`);
+            }
+            boundNames.add(outputName);
+        }
+    }
 }
 
 class PipelineNodeInstance implements DagComponent {
-    operator: BaseOp;
-    inputs: string[];
-    outputs: string[];
-    inputSpecs: OpIO[];
-    outputSpecs: OpIO[];
-    extra_dynattrs: Record<string, string>;
+    readonly operator: BaseOp;
+    readonly inputs: string[];
+    readonly outputs: string[];
+    readonly inputSpecs: OpIO[];
+    readonly outputSpecs: OpIO[];
+    readonly extra_dynattrs: Record<string, string>;
 
     constructor(config: {
         operator: BaseOp;
@@ -31,101 +90,72 @@ class PipelineNodeInstance implements DagComponent {
         outputs: string[];
         inputSpecs: OpIO[];
         outputSpecs: OpIO[];
-        extra_dynattrs?: Record<string, string>;
+        extra_dynattrs: Record<string, string>;
     }) {
         this.operator = config.operator;
         this.inputs = config.inputs;
         this.outputs = config.outputs;
         this.inputSpecs = config.inputSpecs;
         this.outputSpecs = config.outputSpecs;
-        this.extra_dynattrs = config.extra_dynattrs || {};
+        this.extra_dynattrs = config.extra_dynattrs;
     }
 }
 
 export class Pipeline extends BaseVariant {
-    private pipelineNodeInstances: PipelineNodeInstance[] = [];
+    private readonly pipelineNodeInstances: PipelineNodeInstance[];
 
     constructor(
-        modelContent: TarFileContent[],
+        source: ArtifactSource,
         ops: OpInstanceConfig[],
-        variantConfig: Record<string, any>,
-        config: {
-            registry: Registry;
-            deviceMap: DeviceMap;
-            dtypesManager: DtypesManager;
-        }
+        variantConfig: Record<string, unknown>,
+        registry: Registry,
+        dtypesManager: DtypesManager
     ) {
-        super(modelContent, ops, variantConfig, config);
-        this.postInit();
-    }
-
-    protected postInit(): void {
-        const config = this.variantConfig as PipelineConfig;
-        this.pipelineNodeInstances = config.nodes.map(node => {
+        super(source, ops, variantConfig, registry, dtypesManager);
+        const config = variantConfig as unknown as PipelineVariant;
+        this.pipelineNodeInstances = config.nodes.map((node) => {
             const opInstance = this.opInstances.get(node.op_instance_id);
             if (!opInstance) {
-                throw new Error(`Operation instance ${node.op_instance_id} not found`);
+                throw new OperationInstanceError(node.op_instance_id, "instance is not declared");
             }
-
             return new PipelineNodeInstance({
                 operator: opInstance.operator,
                 inputs: node.inputs,
                 outputs: node.outputs,
                 inputSpecs: opInstance.inputSpecs,
                 outputSpecs: opInstance.outputSpecs,
-                extra_dynattrs: node.extra_dynattrs || {}
+                extra_dynattrs: node.extra_dynattrs ?? {},
             });
         });
     }
 
-    private validateInputs(inputs: any[], inputSpecs: OpIO[]): void {
-        for (let i = 0; i < inputSpecs.length; i++) {
-            const spec = inputSpecs[i];
-            const input = inputs[i];
-            if (input === undefined || input === null) continue;
-
-            const inputShape: number[] | undefined = input.shape;
-            if (!inputShape || spec.shape.length === 0) continue;
-
-            if (spec.shape.length !== inputShape.length) {
-                throw new Error(
-                    `Expected input shape [${spec.shape}], got [${inputShape}]`
-                );
-            }
-            for (let d = 0; d < spec.shape.length; d++) {
-                const specDim = spec.shape[d];
-                if (typeof specDim === "string") continue;
-                if (specDim !== inputShape[d]) {
-                    throw new Error(
-                        `Expected input shape [${spec.shape}], got [${inputShape}]`
-                    );
-                }
-            }
-        }
-    }
-
     private async nodeCompute(
         nodeInstance: PipelineNodeInstance,
-        nodeInputs: any[],
-        passthrough: Record<string, any>
-    ): Promise<any> {
-        this.validateInputs(nodeInputs, nodeInstance.inputSpecs);
-        return await nodeInstance.operator.compute(nodeInputs, passthrough.dynamic_attributes);
+        nodeInputs: unknown[],
+        passthrough: Record<string, unknown>
+    ): Promise<unknown> {
+        validateInputs(nodeInputs, nodeInstance.inputSpecs);
+        return nodeInstance.operator.compute(
+            nodeInputs,
+            passthrough.dynamic_attributes as Record<string, string>
+        );
     }
 
     async compute(
-        inputs: Record<string, any>,
-        dynamicAttributes: Record<string, any>
-    ): Promise<Record<string, any>> {
-        const passthrough = {
-            dynamic_attributes: dynamicAttributes
-        };
-        return await dagCompute(
+        inputs: Record<string, unknown>,
+        dynamicAttributes: Record<string, string>
+    ): Promise<Record<string, unknown>> {
+        return dagCompute(
             inputs,
             this.pipelineNodeInstances,
-            (component, inputs, pass) => this.nodeCompute(component as PipelineNodeInstance, inputs, pass),
-            (result) => result.value,
-            passthrough
+            (component, values, passthrough) =>
+                this.nodeCompute(
+                    component as PipelineNodeInstance,
+                    values,
+                    passthrough as Record<string, unknown>
+                ),
+            (result) => (result as { value: unknown[] }).value,
+            { dynamic_attributes: dynamicAttributes }
         );
     }
 }

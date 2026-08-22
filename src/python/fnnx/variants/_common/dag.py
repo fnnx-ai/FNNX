@@ -1,21 +1,20 @@
-from dataclasses import dataclass
 import asyncio
 from concurrent.futures import Future
 from concurrent.futures._base import Executor
 from copy import copy as shallow_copy
+from dataclasses import dataclass
 from typing import Any, Callable, Sequence
-from copy import copy
 
 
 @dataclass
 class AsyncDelayedResponse:
-    task: asyncio.Task
+    task: asyncio.Task[Any]
     index: int
 
 
 @dataclass
 class DelayedResponse:
-    task: Future
+    task: Future[Any]
     index: int
 
 
@@ -27,12 +26,12 @@ class DagComponent:
 
 
 async def dag_compute_async(
-    inputs: dict,
+    inputs: dict[str, Any],
     components: Sequence[DagComponent],
-    compute_fn: Callable,
-    as_val: Callable,
-    components_passthrough: dict,
-) -> dict:
+    compute_fn: Callable[..., Any],
+    as_val: Callable[[Any], Any],
+    components_passthrough: dict[str, Any],
+) -> dict[str, Any]:
     state: dict[str, AsyncDelayedResponse | Any] = shallow_copy(inputs)
     for component in components:
         tasks = []
@@ -48,16 +47,17 @@ async def dag_compute_async(
 
         component_inputs = [state[k] for k in component.inputs]
 
+        component_passthrough = components_passthrough
         if "dynamic_attributes" in components_passthrough:
-            components_passthrough["dynamic_attributes"] = (
-                copy(components_passthrough["dynamic_attributes"])
+            component_passthrough = components_passthrough | {
+                "dynamic_attributes": components_passthrough["dynamic_attributes"]
                 | component.extra_dynattrs
-            )
+            }
         component_compute_output = asyncio.create_task(
             compute_fn(
                 component,
                 component_inputs,
-                **components_passthrough,
+                **component_passthrough,
             )
         )
 
@@ -76,13 +76,13 @@ async def dag_compute_async(
 
 
 def dag_compute(
-    inputs: dict,
+    inputs: dict[str, Any],
     components: Sequence[DagComponent],
     graph_executor: Executor,
-    compute_fn: Callable,
-    as_val: Callable,
-    components_passthrough: dict,
-):
+    compute_fn: Callable[..., Any],
+    as_val: Callable[[Any], Any],
+    components_passthrough: dict[str, Any],
+) -> dict[str, Any]:
     state: dict[str, DelayedResponse | Any] = shallow_copy(inputs)
     for component in components:
         component_inputs = []
@@ -93,18 +93,19 @@ def dag_compute(
                 state[k] = result
             component_inputs.append(state[k])
 
+        component_passthrough = components_passthrough
         if "dynamic_attributes" in components_passthrough:
-            components_passthrough["dynamic_attributes"] = (
-                copy(components_passthrough["dynamic_attributes"])
+            component_passthrough = components_passthrough | {
+                "dynamic_attributes": components_passthrough["dynamic_attributes"]
                 | component.extra_dynattrs
-            )
+            }
 
         component_output = graph_executor.submit(
             compute_fn,
             component,
             component_inputs,
             graph_executor=graph_executor,
-            **components_passthrough,
+            **component_passthrough,
         )
         for i, output_key in enumerate(component.outputs):
             state[output_key] = DelayedResponse(

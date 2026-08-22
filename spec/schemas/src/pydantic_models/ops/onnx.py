@@ -10,7 +10,6 @@ class Opset(BaseModel):
 
 class ONNXAttributes(BaseModel):
     opsets: list[Opset]
-    requires_ort_extensions: bool
     has_external_data: bool
     onnx_ir_version: int
     used_operators: dict[str, list[str]] | None = None
