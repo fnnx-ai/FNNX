@@ -22,6 +22,8 @@ export class ONNXOpV1 extends ONNXOpBase {
         }
         const session = await ort.InferenceSession.create(modelFile.filesystemPath);
         return {
+            inputNames: session.inputNames,
+            outputNames: session.outputNames,
             run: async (inputs: NDArray[]): Promise<NDArray[]> => {
                 const feeds = Object.fromEntries(
                     session.inputNames.map((name, index) => {

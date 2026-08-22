@@ -2,7 +2,7 @@
 
 | Key | Added in | Updated in | Schema |
 | --- | --- | --- | --- |
-| `python3::conda_pip` | 0.0.4 | 0.0.4 | [`env.json`](../schemas/env.json) |
+| `python3::conda_pip` | 0.1.0 | 0.1.0 | [`env.json`](../schemas/env.json) |
 
 `python3::conda_pip` declares a reconstructible Python environment: a Python version, and the packages that must be present before execution starts. It serves artifacts that need an environment the consumer does not already have. A provider is a consumer that reconstructs the environment from this declaration.
 

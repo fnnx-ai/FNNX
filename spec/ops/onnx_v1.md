@@ -2,7 +2,7 @@
 
 | Key | Added in | Updated in | Schema |
 | --- | --- | --- | --- |
-| `ONNX_v1` | 0.0.4 | 0.1.0 | [`op_onnx_v1.json`](../schemas/op_onnx_v1.json) |
+| `ONNX_v1` | 0.1.0 | 0.1.0 | [`op_onnx_v1.json`](../schemas/op_onnx_v1.json) |
 
 `ONNX_v1` executes an ONNX model. The operation adds no computational semantics of its own. The [ONNX specification](https://onnx.ai/onnx/) is the execution contract, and an `ONNX_v1` op instance means what the referenced ONNX model means under that contract.
 

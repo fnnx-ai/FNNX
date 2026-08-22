@@ -51,6 +51,15 @@ function createRawTarEntry(memberPath: string, content: string): Buffer {
     return Buffer.from(entry);
 }
 
+// Builds a path of exactly `length` characters, split into segments no filesystem rejects.
+function memberPathOfLength(length: number): string {
+    const characters = Array.from({ length }, () => "a");
+    for (let index = 50; index < length - 1; index += 51) {
+        characters[index] = "/";
+    }
+    return characters.join("");
+}
+
 describe("Tar extraction with long file names", () => {
     afterEach(() => {
         for (const dir of tempDirs) {
@@ -154,6 +163,36 @@ describe("Tar extraction with long file names", () => {
 
         expect(readFileSync(path.join(extractDir, file1), "utf-8")).toBe("weights data");
         expect(readFileSync(path.join(extractDir, file2), "utf-8")).toBe('{"layers": 3}');
+    });
+
+    it.each([100, 101, 155, 156, 255])(
+        "extracts a member path of exactly %i characters",
+        async (length) => {
+            const sourceDir = makeTempDir();
+            const memberPath = memberPathOfLength(length);
+            writeFile(sourceDir, memberPath, `length ${length}`);
+            expect(memberPath).toHaveLength(length);
+
+            const tarPath = path.join(makeTempDir(), "boundary.tar");
+            await tarCreate({ file: tarPath, C: sourceDir }, ["."]);
+            const extractDir = makeTempDir();
+            await extractTarBufferToDirectory(readFileSync(tarPath), extractDir);
+
+            expect(readFileSync(path.join(extractDir, memberPath), "utf-8")).toBe(
+                `length ${length}`
+            );
+        }
+    );
+
+    it("extracts members whose directories have no member entry of their own", async () => {
+        const withoutDirectories = createRawTarEntry("nested/deep/file.txt", "no dir entries");
+        const extractDir = makeTempDir();
+
+        await extractTarBufferToDirectory(withoutDirectories, extractDir);
+
+        expect(readFileSync(path.join(extractDir, "nested/deep/file.txt"), "utf-8")).toBe(
+            "no dir entries"
+        );
     });
 
     it("rejects symbolic links", async () => {

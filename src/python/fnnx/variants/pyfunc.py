@@ -1,4 +1,5 @@
 from fnnx.variants._base import BaseVariant, OpInstance
+from fnnx.variants._common.validators import validating_op_instance
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 import sys
@@ -104,7 +105,10 @@ class PyFuncVariant(BaseVariant):
     def _post_init(self):
         self.context = Context(
             self.model_path,
-            self.op_instances,
+            {
+                op_id: validating_op_instance(instance)
+                for op_id, instance in self.op_instances.items()
+            },
             self.executor,
             self.device_map,
             values=self.variant_config.get("extra_values", None),

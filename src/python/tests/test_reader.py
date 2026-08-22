@@ -476,6 +476,93 @@ class TestReaderMetadataLoading(unittest.TestCase):
         finally:
             os.unlink(tar_path)
 
+    def test_unknown_entry_keys_are_preserved(self) -> None:
+        manifest = self._base_manifest()
+        entry = self._meta_entry("with_extras", "value")
+        entry["seen_by_a_later_revision"] = {"kept": True}
+        tar_path = self._create_test_tar_with_files(manifest, {"meta.json": [entry]})
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual(
+                reader.metadata[0].model_dump()["seen_by_a_later_revision"],
+                {"kept": True},
+            )
+        finally:
+            os.unlink(tar_path)
+
+
+class TestReaderMemberSelection(unittest.TestCase):
+    def _base_manifest(self):
+        return {
+            "variant": "test_variant",
+            "name": "test_model",
+            "producer_name": "test_producer",
+            "producer_version": "1.0",
+            "producer_tags": [],
+            "inputs": [],
+            "outputs": [],
+            "dynamic_attributes": [],
+            "env_vars": [],
+        }
+
+    def _meta_entry(self, entry_id: str) -> dict[str, object]:
+        return {
+            "id": entry_id,
+            "producer": "test_producer",
+            "producer_version": "1.0",
+            "producer_tags": [],
+            "payload": {},
+        }
+
+    def _create_tar(self, members: list[tuple[str, object]], links=()) -> str:
+        fd, tar_path = tempfile.mkstemp(suffix=".tar")
+        os.close(fd)
+        with tarfile.open(tar_path, "w") as tar:
+            _add_tar_member(tar, "manifest.json", self._base_manifest())
+            for name, content in members:
+                _add_tar_member(tar, name, content)
+            for name, target in links:
+                info = tarfile.TarInfo(name=name)
+                info.type = tarfile.SYMTYPE
+                info.linkname = target
+                tar.addfile(info)
+        return tar_path
+
+    def test_missing_env_json_is_read_as_empty(self) -> None:
+        tar_path = self._create_tar([])
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual(reader.env, {})
+            self.assertIsNone(reader.pyenv)
+        finally:
+            os.unlink(tar_path)
+
+    def test_metadata_declared_as_a_link_is_ignored(self) -> None:
+        tar_path = self._create_tar(
+            [("meta.json", [self._meta_entry("from_meta")])],
+            links=[("meta-linked.json", "meta.json")],
+        )
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual([entry.id for entry in reader.metadata], ["from_meta"])
+        finally:
+            os.unlink(tar_path)
+
+    def test_manifest_patch_declared_as_a_link_is_ignored(self) -> None:
+        tar_path = self._create_tar(
+            [("patch-source.json", [{"op": "replace", "path": "/name", "value": "x"}])],
+            links=[("manifest-linked.patch.json", "patch-source.json")],
+        )
+
+        try:
+            reader = Reader(tar_path)
+            self.assertEqual(reader.manifest.name, "test_model")
+        finally:
+            os.unlink(tar_path)
+
 
 if __name__ == "__main__":
     unittest.main()

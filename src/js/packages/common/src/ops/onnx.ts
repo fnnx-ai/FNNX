@@ -14,6 +14,8 @@ import { BaseOp, OpOutput, OpRuntimeConfig } from "./base.js";
 const STANDARD_ONNX_DOMAINS = new Set(["ai.onnx", "ai.onnx.ml"]);
 
 export interface ONNXSession {
+    readonly inputNames: readonly string[];
+    readonly outputNames: readonly string[];
     run(inputs: NDArray[]): Promise<NDArray[]>;
 }
 
@@ -42,8 +44,9 @@ export abstract class ONNXOpBase extends BaseOp {
     }
 
     async warmup(): Promise<this> {
+        let session: ONNXSession;
         try {
-            this.session = await this.createSession(this.modelFile, this.artifacts);
+            session = await this.createSession(this.modelFile, this.artifacts);
         } catch (error) {
             if (error instanceof FNNXError) {
                 throw error;
@@ -51,8 +54,26 @@ export abstract class ONNXOpBase extends BaseOp {
             const reason = error instanceof Error ? error.message : String(error);
             throw new OperationInstanceError(this.opInstanceId, reason);
         }
+        this.validateArity(session);
+        this.session = session;
         this.setWarmedUp(true);
         return this;
+    }
+
+    private validateArity(session: ONNXSession): void {
+        const arities = [
+            ["inputs", this.inputSpecs.length, session.inputNames.length],
+            ["outputs", this.outputSpecs.length, session.outputNames.length],
+        ] as const;
+        for (const [field, declared, actual] of arities) {
+            if (declared !== actual) {
+                throw new InvalidOperationDeclarationError(
+                    this.opInstanceId,
+                    field,
+                    `declares ${declared} ${field}, but the ONNX model has ${actual}`
+                );
+            }
+        }
     }
 
     protected async run(

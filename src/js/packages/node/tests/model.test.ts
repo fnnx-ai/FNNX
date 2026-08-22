@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync, mkdtempSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { extract as tarExtract } from "tar";
 import { Model, NDArray } from "../src/index";
-import { ModelNotWarmedUpError } from "@fnnx-ai/common";
+import { InvalidOperationDeclarationError, ModelNotWarmedUpError } from "@fnnx-ai/common";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -204,6 +205,63 @@ describe("Model", () => {
             const dtypes = model.getDtypes();
             expect(dtypes).toBeDefined();
             expect(typeof dtypes).toBe("object");
+        });
+    });
+
+    describe("ONNX arity", () => {
+        it("should reject an op instance whose arity differs from its ONNX model", async () => {
+            const directory = await extractModelToDir();
+            const ops = JSON.parse(
+                readFileSync(path.join(directory, "ops.json"), "utf-8")
+            ) as Array<{ id: string; inputs: unknown[] }>;
+            const linreg = ops.find((instance) => instance.id === "linreg")!;
+            linreg.inputs = [...linreg.inputs, { ...(linreg.inputs[0] as object) }];
+            writeFileSync(path.join(directory, "ops.json"), JSON.stringify(ops));
+
+            const variantConfig = JSON.parse(
+                readFileSync(path.join(directory, "variant_config.json"), "utf-8")
+            ) as { nodes: Array<{ op_instance_id: string; inputs: string[] }> };
+            variantConfig.nodes[0].inputs = ["x", "x"];
+            writeFileSync(
+                path.join(directory, "variant_config.json"),
+                JSON.stringify(variantConfig)
+            );
+
+            const model = await Model.fromPath(directory);
+            try {
+                await expect(model.warmup()).rejects.toThrowError(
+                    InvalidOperationDeclarationError
+                );
+                await model.warmup().catch((error: unknown) => {
+                    expect(error).toMatchObject({ opInstanceId: "linreg", field: "inputs" });
+                });
+            } finally {
+                rmSync(directory, { recursive: true, force: true });
+            }
+        });
+    });
+
+    describe("compressed archives", () => {
+        // Consumers MAY accept a transparently compressed stream; this host does.
+        it("should load a gzip-compressed archive from a buffer", async () => {
+            const model = await Model.fromBuffer(gzipSync(readFileSync(MODEL_PATH)));
+
+            expect(model.getManifest().variant).toBe("pipeline");
+            model.cleanup();
+        });
+
+        it("should load a gzip-compressed archive from a path", async () => {
+            const directory = mkdtempSync(path.join(tmpdir(), "fnnx-gzip-"));
+            const compressedPath = path.join(directory, "model.fnnx.tar.gz");
+            writeFileSync(compressedPath, gzipSync(readFileSync(MODEL_PATH)));
+            try {
+                const model = await Model.fromPath(compressedPath);
+
+                expect(model.getManifest().variant).toBe("pipeline");
+                model.cleanup();
+            } finally {
+                rmSync(directory, { recursive: true, force: true });
+            }
         });
     });
 });

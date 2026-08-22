@@ -99,4 +99,52 @@ describe("WebArtifactSource", () => {
 
         expect(() => source.readFile("manifest.json")).toThrowError(MissingArtifactFileError);
     });
+
+    it("ignores unknown root files and unknown directories while loading", () => {
+        const manifest = {
+            variant: "pipeline",
+            description: "kept",
+            producer_name: "tests",
+            producer_version: "1",
+            producer_tags: [],
+            inputs: [],
+            outputs: [],
+            dynamic_attributes: [],
+            env_vars: [],
+        };
+        const entry = {
+            id: "base",
+            producer: "tests",
+            producer_version: "1",
+            producer_tags: [],
+            payload: {},
+        };
+        const source = new WebArtifactSource(
+            tarBuffer([
+                tarEntry("manifest.json", JSON.stringify(manifest)),
+                tarEntry("ops.json", "[]"),
+                tarEntry("variant_config.json", '{"nodes":[]}'),
+                tarEntry("meta.json", JSON.stringify([entry])),
+                tarEntry("README.md", "not part of the spec"),
+                tarEntry("unknown.json", '{"ignored":true}'),
+                tarEntry("future_directory/payload.bin", "binary"),
+                tarEntry("meta_artifacts/orphan/data.json", "{}"),
+            ])
+        );
+
+        expect(source.listRootMembers().sort()).toEqual([
+            "README.md",
+            "manifest.json",
+            "meta.json",
+            "ops.json",
+            "unknown.json",
+            "variant_config.json",
+        ]);
+
+        const model = new Model(source, { operators: {} });
+        expect(model.getManifest().description).toBe("kept");
+        expect(model.getMetadata().map((item) => item.id)).toEqual(["base"]);
+        expect(model.getDtypes()).toEqual({});
+        expect(model.getEnv()).toEqual({});
+    });
 });

@@ -113,10 +113,12 @@ export class TarExtractor {
         return true;
     }
 
+    // ustar name and prefix fields carry UTF-8 bytes, so a short non-ASCII member name has to
+    // decode the same way as the PAX and GNU long-name forms.
     private readString(offset: number, length: number): string {
         const bytes = new Uint8Array(this.buffer, offset, length);
         const nullIndex = bytes.indexOf(0);
-        return new TextDecoder("ascii").decode(
+        return new TextDecoder("utf-8").decode(
             bytes.slice(0, nullIndex === -1 ? length : nullIndex)
         );
     }

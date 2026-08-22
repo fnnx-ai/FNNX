@@ -704,45 +704,57 @@ def test_a_node_op_the_compiler_cannot_compile_is_rejected(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("mutate", "expected"),
+    "mutate",
     [
         pytest.param(
-            lambda nodes, manifest: manifest.update(
-                dynamic_attributes=[{"name": "temperature", "description": "how hot"}]
-            ),
-            r"dynamic attributes.*the manifest declares `temperature`",
-            id="manifest",
-        ),
-        pytest.param(
-            lambda nodes, manifest: nodes[1].dynamic_attributes.update(
+            lambda nodes: nodes[1].dynamic_attributes.update(
                 {"scale": {"name": "scale", "default_value": "1"}}
             ),
-            r"dynamic attributes.*op instance `left` declares `scale`",
             id="op-instance",
         ),
         pytest.param(
-            lambda nodes, manifest: nodes[2].extra_dynattrs.update({"scale": "other"}),
-            r"dynamic attributes.*pipeline node `right` declares `scale`",
+            lambda nodes: nodes[2].extra_dynattrs.update({"scale": "other"}),
             id="pipeline-node",
         ),
     ],
 )
-def test_dynamic_attributes_are_rejected(tmp_path, mutate, expected):
+def test_declared_dynamic_attributes_are_ignored(tmp_path, mutate):
+    """`ONNX_v1` defines no dynamic attributes, so a consumer ignores whatever is declared.
+
+    The runtime op ignores them too, which is why it stays the oracle here.
+    """
     nodes = _diamond_nodes()
-    manifest: dict[str, Any] = {}
-    mutate(nodes, manifest)
+    mutate(nodes)
     bundle = _write_bundle(
         tmp_path / "dynattrs.fnnx",
         nodes,
         [_manifest_tensor("x")],
+        [_manifest_tensor("h"), _manifest_tensor("out")],
+    )
+    feeds = {"x": _values((1, 3))}
+
+    compiled = compile_bundle(bundle, tmp_path / "out").load()
+
+    _assert_matches(compiled.run(feeds), _runtime_outputs(bundle, feeds))
+
+
+def test_manifest_dynamic_attributes_do_not_gate_compilation(tmp_path):
+    """The manifest documents the attributes a caller may pass; it never gates execution.
+
+    Only the op instance and node declarations say that the computation reads one.
+    """
+    bundle = _write_bundle(
+        tmp_path / "manifest-dynattrs.fnnx",
+        _diamond_nodes(),
+        [_manifest_tensor("x")],
         [_manifest_tensor("out")],
-        manifest_dynamic_attributes=manifest.get("dynamic_attributes", ()),
+        manifest_dynamic_attributes=[{"name": "temperature", "description": "how hot"}],
     )
     output = tmp_path / "out"
 
-    with pytest.raises(CompileError, match=expected):
-        compile_bundle(bundle, output)
-    _assert_nothing_written(output)
+    result = compile_bundle(bundle, output)
+
+    assert result.header_path.is_file()
 
 
 @pytest.mark.parametrize(

@@ -1,7 +1,15 @@
 import { ArtifactSource, readArtifactFile } from "./artifact.js";
+import { validateManifest, validateOpDeclarations } from "./declarations.js";
 import { DtypeSchema, DtypesManager } from "./dtypes.js";
 import { InvalidArtifactFileError, ModelNotWarmedUpError } from "./errors.js";
-import { DynamicAttributes, HandlerConfig, Inputs, LocalHandler, Outputs } from "./handler.js";
+import {
+    DynamicAttributes,
+    HandlerConfig,
+    Inputs,
+    LocalHandler,
+    Outputs,
+    validateVariantDeclarations,
+} from "./handler.js";
 import { Manifest, MetaEntry, OpInstanceConfig } from "./interfaces.js";
 import { applyPatches, JsonObject, JsonPatch, JsonValue } from "./jsonpatcher.js";
 
@@ -13,19 +21,22 @@ export class Model {
     private readonly metadata: MetaEntry[];
     private readonly dtypes: Record<string, DtypeSchema>;
     private readonly environment: Record<string, unknown>;
-    private readonly handler: LocalHandler;
+    private readonly source: ArtifactSource;
+    private readonly ops: OpInstanceConfig[];
+    private readonly variantConfig: JsonObject;
+    private readonly dtypesManager: DtypesManager;
+    private readonly handlerConfig: HandlerConfig;
+    private handler: LocalHandler | null = null;
     private warmedUp = false;
 
     constructor(source: ArtifactSource, config: HandlerConfig) {
-        this.manifest = this.loadManifest(source);
-        const opsValue = parseJsonFile(source, "ops.json");
-        if (!Array.isArray(opsValue)) {
-            throw new InvalidArtifactFileError("ops.json", "expected an array");
-        }
+        this.manifest = validateManifest(this.loadManifest(source));
+        this.ops = validateOpDeclarations(parseJsonFile(source, "ops.json"));
         const variantValue = parseJsonFile(source, "variant_config.json");
         if (!isObject(variantValue)) {
             throw new InvalidArtifactFileError("variant_config.json", "expected an object");
         }
+        this.variantConfig = variantValue;
         const dtypes = this.loadOptionalObject(source, "dtypes.json");
         for (const schema of Object.values(dtypes)) {
             if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
@@ -36,20 +47,16 @@ export class Model {
             }
         }
         this.dtypes = dtypes as Record<string, DtypeSchema>;
+        this.dtypesManager = new DtypesManager(this.dtypes);
         this.environment = this.loadOptionalObject(source, "env.json");
         this.metadata = this.loadMetadata(source);
-        this.handler = new LocalHandler(
-            source,
-            this.manifest,
-            opsValue as unknown as OpInstanceConfig[],
-            variantValue,
-            new DtypesManager(this.dtypes),
-            config
-        );
+        this.source = source;
+        this.handlerConfig = config;
+        validateVariantDeclarations(this.manifest, this.ops, this.variantConfig);
     }
 
     async warmup(): Promise<void> {
-        await this.handler.warmup();
+        await this.getHandler().warmup();
         this.warmedUp = true;
     }
 
@@ -57,7 +64,23 @@ export class Model {
         if (!this.warmedUp) {
             throw new ModelNotWarmedUpError();
         }
-        return this.handler.compute(inputs, dynamicAttributes);
+        return this.getHandler().compute(inputs, dynamicAttributes);
+    }
+
+    /**
+     * The handler is built on first use, so an artifact whose variant or operations this
+     * consumer cannot execute still exposes what Core defines.
+     */
+    protected getHandler(): LocalHandler {
+        this.handler ??= new LocalHandler(
+            this.source,
+            this.manifest,
+            this.ops,
+            this.variantConfig,
+            this.dtypesManager,
+            this.handlerConfig
+        );
+        return this.handler;
     }
 
     getManifest(): Manifest {
@@ -76,7 +99,7 @@ export class Model {
         return cloneJson(this.environment);
     }
 
-    private loadManifest(source: ArtifactSource): Manifest {
+    private loadManifest(source: ArtifactSource): JsonObject {
         const value = parseJsonFile(source, "manifest.json");
         if (!isObject(value)) {
             throw new InvalidArtifactFileError("manifest.json", "expected an object");
@@ -92,7 +115,7 @@ export class Model {
             }
             return patch as unknown as JsonPatch;
         });
-        return applyPatches(value as JsonObject, patches) as unknown as Manifest;
+        return applyPatches(value, patches);
     }
 
     private loadMetadata(source: ArtifactSource): MetaEntry[] {

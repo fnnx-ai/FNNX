@@ -18,6 +18,7 @@ from typing import Any
 
 from onnx import ModelProto, TypeProto, ValueInfoProto, helper
 
+from fnnx.artifact import load_effective_manifest
 from fnnx.extras.compilers.c.errors import CompileError
 from fnnx.extras.compilers.c.onnx.api import write_artifact
 from fnnx.extras.compilers.c.onnx.codegen import (
@@ -186,7 +187,7 @@ class Bundle:
 
 def read_bundle(directory: Path, *, source_name: str) -> Bundle:
     """Read an unpacked bundle directory, validating it against the C compiler's contract."""
-    manifest = _read_json(directory / MANIFEST_FILE)
+    manifest = _read_manifest(directory)
     ops = _read_json(directory / OPS_FILE)
     variant_config = _read_json(directory / VARIANT_FILE)
 
@@ -200,9 +201,11 @@ def read_bundle(directory: Path, *, source_name: str) -> Bundle:
     _validate(
         lambda config: validate_variant(variant, config), variant_config, VARIANT_FILE
     )
+    # `ONNX_v1` is the only op the compiler compiles, and it defines no dynamic attributes:
+    # both the op instance's `dynamic_attributes` and a node's `extra_dynattrs` are ignored,
+    # exactly as the runtime op ignores them.
     _reject_unknown_ops(ops)
     _validate(validate_op_instances, ops, OPS_FILE)
-    _reject_dynamic_attributes(manifest, ops, variant_config)
 
     instances = {
         instance["id"]: _read_op_instance(instance, directory) for instance in ops
@@ -340,34 +343,13 @@ def _reject_unknown_ops(ops: Any) -> None:
             )
 
 
-def _reject_dynamic_attributes(
-    manifest: Mapping[str, Any],
-    ops: Sequence[Mapping[str, Any]],
-    variant_config: Mapping[str, Any],
-) -> None:
-    """Refuse a bundle that takes attribute values per call.
-
-    Everything the artifact does is fixed at compile time, so a dynamic attribute cannot be
-    honoured; compiling as if it were absent would silently ignore what the caller passes.
-    """
-    declared: list[tuple[str, Iterable[Any]]] = [
-        ("the manifest", [entry["name"] for entry in manifest["dynamic_attributes"]])
-    ]
-    declared += [
-        (f"op instance `{instance['id']}`", instance["dynamic_attributes"])
-        for instance in ops
-    ]
-    declared += [
-        (f"pipeline node `{node['op_instance_id']}`", node["extra_dynattrs"])
-        for node in variant_config["nodes"]
-    ]
-    for owner, names in declared:
-        listed = ", ".join(f"`{name}`" for name in sorted(names))
-        if listed:
-            raise CompileError(
-                f"The C compiler does not support dynamic attributes, and {owner} "
-                f"declares {listed}."
-            )
+def _read_manifest(directory: Path) -> Any:
+    try:
+        return load_effective_manifest(os.fspath(directory))
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
+        raise CompileError(
+            f"Could not read `{MANIFEST_FILE}` from the bundle: {error}"
+        ) from error
 
 
 def _read_json(path: Path) -> Any:

@@ -135,6 +135,65 @@ describe("applyPatches", () => {
         });
     });
 
+    describe("RFC 6901 empty reference tokens", () => {
+        it("should address the empty-string key with '/'", () => {
+            const doc = { "": 1 };
+            const result = applyPatches(doc, [[{ op: "replace", path: "/", value: 2 }]]);
+            expect(result).toEqual({ "": 2 });
+        });
+
+        it("should add the empty-string key with '/'", () => {
+            const doc = { a: 1 };
+            const result = applyPatches(doc, [[{ op: "add", path: "/", value: 2 }]]);
+            expect(result).toEqual({ a: 1, "": 2 });
+        });
+
+        it("should not collapse an empty token inside a path", () => {
+            const doc = { a: { "": { b: 1 }, b: 9 } };
+            const result = applyPatches(doc, [[{ op: "replace", path: "/a//b", value: 2 }]]);
+            expect(result).toEqual({ a: { "": { b: 2 }, b: 9 } });
+        });
+
+        it("should report a missing empty-string member instead of the wrong one", () => {
+            const doc = { a: { b: 1 } };
+            expect(() => applyPatches(doc, [[{ op: "replace", path: "/a//b", value: 2 }]])).toThrow(
+                "not found while traversing"
+            );
+        });
+    });
+
+    describe("RFC 6902 array index tokens", () => {
+        it.each(["01", "1abc", " 1", "1.9", "+1", "-1", "1 "])(
+            "should reject the non-canonical array index '%s'",
+            (token) => {
+                const doc = { items: [1, 2] };
+                expect(() =>
+                    applyPatches(doc, [[{ op: "replace", path: `/items/${token}`, value: 99 }]])
+                ).toThrow("Array index must be an integer");
+                expect(() =>
+                    applyPatches(doc, [[{ op: "add", path: `/items/${token}`, value: 99 }]])
+                ).toThrow("Array index must be an integer");
+            }
+        );
+
+        it("should reject '-' for replace", () => {
+            const doc = { items: [1, 2] };
+            expect(() =>
+                applyPatches(doc, [[{ op: "replace", path: "/items/-", value: 99 }]])
+            ).toThrow("Array index must be an integer");
+        });
+
+        it("should still accept canonical indices", () => {
+            const doc = { items: [1, 2] };
+            expect(applyPatches(doc, [[{ op: "replace", path: "/items/0", value: 9 }]])).toEqual({
+                items: [9, 2],
+            });
+            expect(applyPatches(doc, [[{ op: "add", path: "/items/2", value: 3 }]])).toEqual({
+                items: [1, 2, 3],
+            });
+        });
+    });
+
     describe("error cases", () => {
         it("should throw for unsupported operations", () => {
             const doc = { a: 1 };
@@ -183,6 +242,57 @@ describe("applyPatches", () => {
             expect(() => applyPatches(doc, [[{ op: "add", value: 2 } as any]])).toThrow(
                 "Invalid JSON Patch operation"
             );
+        });
+    });
+
+    describe("falsy and structural values", () => {
+        it.each([
+            ["null", null],
+            ["false", false],
+            ["zero", 0],
+            ["an empty string", ""],
+            ["an empty array", []],
+        ])("should store %s as the added value", (_label, value) => {
+            const doc = { a: 1 };
+            expect(applyPatches(doc, [[{ op: "add", path: "/b", value }]])).toEqual({
+                a: 1,
+                b: value,
+            });
+        });
+
+        it("should replace inside nested arrays", () => {
+            const doc = { matrix: [[1, 2], [3, 4]] };
+            expect(applyPatches(doc, [[{ op: "replace", path: "/matrix/0/1", value: 999 }]])).toEqual(
+                { matrix: [[1, 999], [3, 4]] }
+            );
+        });
+
+        it("should reach five levels of nesting", () => {
+            const doc = { a: { b: { c: { d: { e: "deep" } } } } };
+            const result = applyPatches(doc, [
+                [{ op: "replace", path: "/a/b/c/d/e", value: "updated" }],
+            ]);
+            expect(result).toEqual({ a: { b: { c: { d: { e: "updated" } } } } });
+        });
+
+        it("should copy the document even with no patches to apply", () => {
+            const doc = { a: 1 };
+            expect(applyPatches(doc, [])).not.toBe(doc);
+            expect(applyPatches(doc, [[]])).toEqual({ a: 1 });
+        });
+
+        it.each([
+            ["a string", "value"],
+            ["a number", 123],
+            ["null", null],
+        ])("should reject traversing into %s", (_label, leaf) => {
+            const doc = { key: leaf };
+            expect(() => applyPatches(doc, [[{ op: "add", path: "/key/child", value: 1 }]])).toThrow(
+                /not a container|non-container/
+            );
+            expect(() =>
+                applyPatches(doc, [[{ op: "replace", path: "/key/child", value: 1 }]])
+            ).toThrow(/not a container|non-container/);
         });
     });
 

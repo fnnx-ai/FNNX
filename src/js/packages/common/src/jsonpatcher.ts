@@ -22,16 +22,19 @@ function splitPointer(path: string): string[] {
             `Only absolute JSON Pointer paths are supported, got: '${path}'`
         );
     }
-    const rawTokens = path.slice(1).split("/");
-    return rawTokens.filter((t) => t !== "").map(decodePointerToken);
+    // RFC 6901: "" is a legal reference token, so tokens are never dropped.
+    return path.slice(1).split("/").map(decodePointerToken);
 }
 
+// RFC 6902 array indices are canonical decimal numbers: no leading zeros, signs or padding.
+const ARRAY_INDEX_PATTERN = /^(?:0|[1-9][0-9]*)$/;
+
 function parseIndex(token: string, maxLen: number): number {
-    const idx = parseInt(token, 10);
-    if (isNaN(idx)) {
+    if (!ARRAY_INDEX_PATTERN.test(token)) {
         throw new Error(`Array index must be an integer, got '${token}'`);
     }
-    if (idx < 0 || idx >= maxLen) {
+    const idx = Number(token);
+    if (idx >= maxLen) {
         throw new RangeError(
             `Array index ${idx} out of range (len=${maxLen})`
         );
@@ -40,11 +43,11 @@ function parseIndex(token: string, maxLen: number): number {
 }
 
 function parseIndexForAdd(token: string, maxLen: number): number {
-    const idx = parseInt(token, 10);
-    if (isNaN(idx)) {
+    if (!ARRAY_INDEX_PATTERN.test(token)) {
         throw new Error(`Array index must be an integer, got '${token}'`);
     }
-    if (idx < 0 || idx > maxLen) {
+    const idx = Number(token);
+    if (idx > maxLen) {
         throw new RangeError(
             `Array index ${idx} out of range for add (len=${maxLen})`
         );
@@ -54,11 +57,6 @@ function parseIndexForAdd(token: string, maxLen: number): number {
 
 function traverseToParent(doc: JsonValue, path: string): [JsonValue, string] {
     const tokens = splitPointer(path);
-    if (tokens.length === 0) {
-        throw new Error(
-            `Path '${path}' does not point to a child of the root`
-        );
-    }
 
     let parent: JsonValue = doc;
     for (let i = 0; i < tokens.length - 1; i++) {

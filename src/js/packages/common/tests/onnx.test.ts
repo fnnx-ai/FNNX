@@ -29,7 +29,16 @@ class TestONNXOp extends ONNXOpBase {
         _modelFile: ArtifactFile,
         _artifacts: ArtifactFile[]
     ): Promise<ONNXSession> {
-        return { run: async () => [] };
+        return { inputNames: [], outputNames: [], run: async () => [] };
+    }
+}
+
+class TwoInputONNXOp extends TestONNXOp {
+    protected async createSession(
+        _modelFile: ArtifactFile,
+        _artifacts: ArtifactFile[]
+    ): Promise<ONNXSession> {
+        return { inputNames: ["a", "b"], outputNames: ["c"], run: async () => [] };
     }
 }
 
@@ -45,6 +54,8 @@ class FailingONNXOp extends TestONNXOp {
         _artifacts: ArtifactFile[]
     ): Promise<ONNXSession> {
         return {
+            inputNames: [],
+            outputNames: [],
             run: async () => {
                 throw new Error("backend failure");
             },
@@ -119,6 +130,42 @@ describe("shared ONNX operation", () => {
         expect(() => new TestONNXOp([MODEL_FILE], config({ opsets: "invalid" }))).toThrowError(
             InvalidOperationDeclarationError
         );
+    });
+
+    it.each([
+        { inputs: [], outputs: [{ dtype: "Array[float32]", shape: [] }], field: "inputs" },
+        {
+            inputs: [
+                { dtype: "Array[float32]", shape: [] },
+                { dtype: "Array[float32]", shape: [] },
+            ],
+            outputs: [],
+            field: "outputs",
+        },
+    ])("rejects an ONNX model whose $field arity differs from the declaration", async (arity) => {
+        const operation = new TwoInputONNXOp([MODEL_FILE], {
+            ...config(),
+            inputs: arity.inputs,
+            outputs: arity.outputs,
+        });
+
+        await expect(operation.warmup()).rejects.toThrowError(InvalidOperationDeclarationError);
+        await operation.warmup().catch((error: unknown) => {
+            expect(error).toMatchObject({ opInstanceId: "predict", field: arity.field });
+        });
+    });
+
+    it("accepts an ONNX model whose arity matches the declaration", async () => {
+        const operation = new TwoInputONNXOp([MODEL_FILE], {
+            ...config(),
+            inputs: [
+                { dtype: "Array[float32]", shape: [] },
+                { dtype: "Array[float32]", shape: [] },
+            ],
+            outputs: [{ dtype: "Array[float32]", shape: [] }],
+        });
+
+        await expect(operation.warmup()).resolves.toBe(operation);
     });
 
     it("wraps backend errors with the op instance id", async () => {

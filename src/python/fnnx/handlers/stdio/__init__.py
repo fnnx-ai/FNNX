@@ -10,6 +10,7 @@ from os.path import join as pjoin
 from shutil import rmtree
 from typing import Any
 
+from fnnx.artifact import io_specs_by_name, load_effective_manifest, load_root_json
 from fnnx.device import DeviceMap
 from fnnx.dtypes import (
     BUILTINS,
@@ -67,31 +68,23 @@ class StdIOHandler(BaseHandler):
         if self.cleanup:
             atexit.register(lambda: _cleanup(self.model_path))
 
-        with open(pjoin(self.model_path, "manifest.json"), "r") as f:
-            self.manifest = json.load(f)
-            validate_manifest(self.manifest)
-            self.input_specs = {i["name"]: i for i in self.manifest["inputs"]}
-            self.output_specs = {o["name"]: o for o in self.manifest["outputs"]}
+        self.manifest = load_effective_manifest(self.model_path)
+        validate_manifest(self.manifest)
+        self.input_specs = io_specs_by_name(self.manifest["inputs"], "input")
+        self.output_specs = io_specs_by_name(self.manifest["outputs"], "output")
 
-        with open(pjoin(self.model_path, "ops.json"), "r") as f:
-            self.ops = json.load(f)
-            validate_op_instances(self.ops)
+        self.ops = load_root_json(self.model_path, "ops.json")
+        validate_op_instances(self.ops)
 
-        with open(pjoin(self.model_path, "variant_config.json"), "r") as f:
-            self.variant_config = json.load(f)
-            validate_variant(self.manifest["variant"], self.variant_config)
+        self.variant_config = load_root_json(self.model_path, "variant_config.json")
+        validate_variant(self.manifest["variant"], self.variant_config)
         if self.manifest["variant"] == "pipeline":
             validate_pipeline(self.manifest, self.ops, self.variant_config)
 
-        with open(pjoin(self.model_path, "dtypes.json"), "r") as f:
-            external_dtypes = json.load(f)
-            self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
+        external_dtypes = load_root_json(self.model_path, "dtypes.json")
+        self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
 
-        env_spec_path = pjoin(self.model_path, "env.json")
-        raw_env_spec: dict[str, Any] = {}
-        if os.path.exists(env_spec_path):
-            with open(env_spec_path, "r") as f:
-                raw_env_spec = json.load(f)
+        raw_env_spec: dict[str, Any] = load_root_json(self.model_path, "env.json")
         if _ENVIRONMENT_KIND not in raw_env_spec:
             offered_kinds = (
                 ", ".join(f"`{kind}`" for kind in sorted(raw_env_spec)) or "none"

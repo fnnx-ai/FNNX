@@ -2,10 +2,11 @@ export * as interfaces from "./interfaces.js";
 
 export { assertSafeArtifactPath, readArtifactFile } from "./artifact.js";
 export type { ArtifactFile, ArtifactSource } from "./artifact.js";
+export { validateManifest, validateOpDeclarations } from "./declarations.js";
 export { DtypesManager } from "./dtypes.js";
 export type { DtypeSchema } from "./dtypes.js";
 export * from "./errors.js";
-export { LocalHandler } from "./handler.js";
+export { LocalHandler, validateVariantDeclarations } from "./handler.js";
 export type { DynamicAttributes, HandlerConfig, Inputs, Outputs } from "./handler.js";
 export { applyPatches } from "./jsonpatcher.js";
 export type { JsonObject, JsonPatch, JsonPatchOp, JsonValue } from "./jsonpatcher.js";

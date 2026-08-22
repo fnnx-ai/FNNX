@@ -1,7 +1,7 @@
 import { ArtifactSource } from "./artifact.js";
 import { DtypesManager } from "./dtypes.js";
-import { UnsupportedVariantError } from "./errors.js";
-import { JSONIO, Manifest, NDJSONIO, OpInstanceConfig } from "./interfaces.js";
+import { InvalidArtifactFileError, UnsupportedVariantError } from "./errors.js";
+import { JSONIO, Manifest, ModelIO, NDJSONIO, OpInstanceConfig } from "./interfaces.js";
 import { ArrayDType, NDArray } from "./ndarray.js";
 import { NDContainer } from "./ndcontainer.js";
 import { ConcreteOp } from "./ops/base.js";
@@ -15,6 +15,28 @@ export type Outputs = Record<string, unknown>;
 
 export interface HandlerConfig {
     operators: Record<string, ConcreteOp>;
+}
+
+type VariantValidator = (
+    manifest: Manifest,
+    ops: OpInstanceConfig[],
+    variantConfig: Record<string, unknown>
+) => void;
+
+const VARIANTS: Record<string, { validate: VariantValidator; runtime: ConcreteVariant }> = {
+    pipeline: { validate: validatePipeline, runtime: Pipeline },
+};
+
+/**
+ * Validates the declarations of a known variant. An unknown variant is left alone: Core-level
+ * reading stays available, and execution reports the variant as unsupported.
+ */
+export function validateVariantDeclarations(
+    manifest: Manifest,
+    ops: OpInstanceConfig[],
+    variantConfig: Record<string, unknown>
+): void {
+    VARIANTS[manifest.variant]?.validate(manifest, ops, variantConfig);
 }
 
 export class LocalHandler {
@@ -37,13 +59,12 @@ export class LocalHandler {
         this.inputSpecs = Object.fromEntries(manifest.inputs.map((spec) => [spec.name, spec]));
         this.outputSpecs = Object.fromEntries(manifest.outputs.map((spec) => [spec.name, spec]));
 
-        let VariantClass: ConcreteVariant;
-        if (this.variant === "pipeline") {
-            validatePipeline(manifest, ops, variantConfig);
-            VariantClass = Pipeline;
-        } else {
+        const variantEntry = VARIANTS[this.variant];
+        if (!variantEntry) {
             throw new UnsupportedVariantError(this.variant);
         }
+        variantEntry.validate(manifest, ops, variantConfig);
+        const VariantClass: ConcreteVariant = variantEntry.runtime;
         this.runtimeVariant = new VariantClass(
             source,
             ops,
@@ -89,7 +110,12 @@ export class LocalHandler {
                     preparedInputs[name] =
                         input instanceof NDContainer
                             ? input
-                            : new NDContainer(input, spec.dtype, this.dtypesManager);
+                            : new NDContainer(
+                                  input,
+                                  spec.dtype,
+                                  this.dtypesManager,
+                                  spec.shape.length
+                              );
                 } else if (spec.dtype.startsWith("Array[")) {
                     if (!(input instanceof NDArray)) {
                         throw new Error(`Input ${name} must be an NDArray`);
@@ -110,6 +136,12 @@ export class LocalHandler {
                 }
                 this.dtypesManager.validateJsonSchema(spec.dtype, input);
                 preparedInputs[name] = input;
+            } else {
+                throw new InvalidArtifactFileError(
+                    "manifest.json",
+                    `input \`${name}\` declares unsupported content type ` +
+                        `\`${(spec as ModelIO).content_type}\``
+                );
             }
         }
         return preparedInputs;

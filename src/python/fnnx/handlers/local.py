@@ -3,13 +3,12 @@ try:
 except ImportError:
     np = None  # type: ignore[assignment]
 import atexit
-import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from os.path import join as pjoin
 from shutil import rmtree
 from typing import Any
 
+from fnnx.artifact import io_specs_by_name, load_effective_manifest, load_root_json
 from fnnx.device import DeviceMap
 from fnnx.dtypes import (
     BUILTINS,
@@ -65,10 +64,10 @@ class LocalHandler(BaseHandler):
             # passing model_path and not self.model_path to avoid reference on self
             atexit.register(lambda: _cleanup(model_path))
 
-        self.manifest = self._load_json_config("manifest.json")
+        self.manifest = load_effective_manifest(self.model_path)
         validate_manifest(self.manifest)
-        self.input_specs = {spec["name"]: spec for spec in self.manifest["inputs"]}
-        self.output_specs = {spec["name"]: spec for spec in self.manifest["outputs"]}
+        self.input_specs = io_specs_by_name(self.manifest["inputs"], "input")
+        self.output_specs = io_specs_by_name(self.manifest["outputs"], "output")
 
         self.ops = self._load_json_config("ops.json")
         validate_op_instances(self.ops)
@@ -81,7 +80,7 @@ class LocalHandler(BaseHandler):
         external_dtypes = self._load_json_config("dtypes.json")
         self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
 
-        self.variant = self.manifest.get("variant")
+        self.variant = self.manifest["variant"]
 
         registry = Registry()
         registry.register_default_ops()
@@ -108,8 +107,7 @@ class LocalHandler(BaseHandler):
 
     def _load_json_config(self, filename: str):
         """Load and return JSON config from model path."""
-        with open(pjoin(self.model_path, filename), "r") as f:
-            return json.load(f)
+        return load_root_json(self.model_path, filename)
 
     def _as_np(self, data: Any, spec: dict[str, Any]) -> Any:
         if np is None:

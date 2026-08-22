@@ -1,5 +1,5 @@
 import unittest
-from fnnx.extras.jsonpatcher import apply_patches
+from fnnx.jsonpatcher import apply_patches
 
 
 class TestApplyPatches(unittest.TestCase):

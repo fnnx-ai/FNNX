@@ -58,6 +58,16 @@ class TestDtypesManager(unittest.TestCase):
             with self.subTest(invalid_value=invalid_value), self.assertRaises(TypeError):
                 self.manager.validate_dtype("boolean", invalid_value)
 
+    def test_float_accepts_a_whole_number(self) -> None:
+        self.manager.validate_dtype("float", 2)
+        self.manager.validate_dtype("float", 2.5)
+
+        value = NDContainer([2, 2.5], "NDContainer[float]", self.manager)
+        self.assertEqual(value.data, [2, 2.5])
+
+        with self.assertRaises(TypeError):
+            self.manager.validate_dtype("integer", 2.0)
+
     def test_all_reserved_dtype_names_are_rejected(self) -> None:
         reserved_names = {
             "string",
@@ -134,6 +144,10 @@ class TestNDContainer(unittest.TestCase):
         data = [[{"num": 1}, {"num": 1}], [{"num": 1}, {"num": 1}]]
         nd = NDContainer(data, "NDContainer[Number]", self.dtype_manager)
         self.assertEqual(nd.shape, (2, 2))
+
+    def test_initialization_with_array_inner_dtype(self):
+        with self.assertRaisesRegex(ValueError, r"Array\[float32\]"):
+            NDContainer([[1.0]], "NDContainer[Array[float32]]", self.dtype_manager)
 
     def test_get_item_single_index(self):
         data = [1, 2, 3]

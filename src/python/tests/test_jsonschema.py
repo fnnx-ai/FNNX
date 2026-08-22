@@ -487,5 +487,83 @@ class TestValidateJSONSchema(unittest.TestCase):
             validate_jsonschema(instance, schema)
 
 
+class TestSiblingKeywords(unittest.TestCase):
+    """Every in-subset keyword of a schema object is enforced, not just the first one."""
+
+    def test_const_does_not_shadow_a_sibling(self):
+        schema = {"const": {"a": 1}, "type": "array"}
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"a": 1}, schema)
+
+    def test_enum_does_not_shadow_a_sibling(self):
+        schema = {"enum": [{"a": 1}], "required": ["b"]}
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"a": 1}, schema)
+
+    def test_any_of_does_not_shadow_a_sibling(self):
+        schema = {
+            "anyOf": [{"type": "object"}, {"type": "array"}],
+            "required": ["b"],
+        }
+        validate_jsonschema({"b": 1}, schema)
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"a": 1}, schema)
+
+    def test_all_of_does_not_shadow_a_sibling(self):
+        schema = {"allOf": [{"type": "object"}], "required": ["b"]}
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"a": 1}, schema)
+
+    def test_one_of_does_not_shadow_a_sibling(self):
+        schema = {
+            "oneOf": [{"type": "object"}, {"type": "array"}],
+            "required": ["b"],
+        }
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"a": 1}, schema)
+
+    def test_if_then_else_does_not_shadow_a_sibling(self):
+        schema = {
+            "if": {"required": ["a"]},
+            "then": {"required": ["b"]},
+            "else": {"required": ["c"]},
+            "type": "object",
+            "maxProperties": 2,
+        }
+        validate_jsonschema({"a": 1, "b": 2}, schema)
+        with self.assertRaises(ValueError):
+            validate_jsonschema([1], schema)
+
+    def test_then_failure_does_not_fall_back_to_else(self):
+        schema = {
+            "if": {"required": ["a"]},
+            "then": {"required": ["b"]},
+            "else": {"required": ["a"]},
+        }
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"a": 1}, schema)
+
+
+class TestUnanchoredPatterns(unittest.TestCase):
+    """`pattern` and `patternProperties` are searched, not anchored at the start."""
+
+    def test_pattern_matches_anywhere_in_the_string(self):
+        validate_jsonschema("abc-123-def", {"type": "string", "pattern": "123"})
+
+    def test_pattern_anchored_at_the_end_is_enforced(self):
+        with self.assertRaises(ValueError):
+            validate_jsonschema("123-abc", {"type": "string", "pattern": "\\d+$"})
+
+    def test_pattern_properties_match_anywhere_in_the_key(self):
+        schema = {
+            "type": "object",
+            "patternProperties": {"count$": {"type": "integer"}},
+            "additionalProperties": False,
+        }
+        validate_jsonschema({"item_count": 2}, schema)
+        with self.assertRaises(ValueError):
+            validate_jsonschema({"item_count": "two"}, schema)
+
+
 if __name__ == "__main__":
     unittest.main()

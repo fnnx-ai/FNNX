@@ -214,6 +214,7 @@ schema = {
         "type": "object",
     },
     "meta_entry": {
+        "additionalProperties": True,
         "properties": {
             "id": {"title": "Id", "type": "string"},
             "producer": {"title": "Producer", "type": "string"},

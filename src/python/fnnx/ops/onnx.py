@@ -51,8 +51,20 @@ class OnnxOp_V1(BaseOp):
             ) from error
         self._ort_inputs = [i.name for i in self._sess.get_inputs()]
         self._ort_outputs = [o.name for o in self._sess.get_outputs()]
+        self._verify_arity(op_instance_id)
         self._warmed_up = True
         return self
+
+    def _verify_arity(self, op_instance_id: str) -> None:
+        for role, declared, graph in (
+            ("input", self.input_specs, self._ort_inputs),
+            ("output", self.output_specs, self._ort_outputs),
+        ):
+            if len(declared) != len(graph):
+                raise RuntimeError(
+                    f"ONNX op instance `{op_instance_id}` declares {len(declared)} "
+                    f"{role}(s), but its model has {len(graph)}"
+                )
 
     def compute(
         self,

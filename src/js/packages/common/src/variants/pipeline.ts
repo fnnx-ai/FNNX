@@ -1,11 +1,12 @@
 import { ArtifactSource } from "../artifact.js";
 import { DtypesManager } from "../dtypes.js";
-import { OperationInstanceError } from "../errors.js";
+import { InvalidArtifactFileError, OperationInstanceError } from "../errors.js";
 import { Manifest, OpInstanceConfig, OpIO, PipelineVariant } from "../interfaces.js";
 import { BaseOp } from "../ops/base.js";
 import Registry from "../registry.js";
 import { BaseVariant } from "./base.js";
 import { DagComponent, dagCompute } from "./common/dag.js";
+import { validateInputs } from "./common/validators.js";
 
 export function validatePipeline(
     manifest: Manifest,
@@ -17,12 +18,18 @@ export function validatePipeline(
         ["output", manifest.outputs],
     ] as const) {
         for (const entry of entries) {
-            if (entry.content_type === "JSON") {
-                throw new Error(
-                    `Pipeline ${entryKind} \`${entry.name}\` cannot use JSON content type`
+            if (entry.content_type !== "NDJSON") {
+                throw new InvalidArtifactFileError(
+                    "manifest.json",
+                    `Pipeline ${entryKind} \`${entry.name}\` requires the NDJSON content type, ` +
+                        `got \`${entry.content_type}\``
                 );
             }
         }
+    }
+
+    if (!Array.isArray(variantConfig.nodes)) {
+        throw new InvalidArtifactFileError("variant_config.json", "`nodes` must be an array");
     }
 
     const opInstances = new Map(ops.map((instance) => [instance.id, instance]));
@@ -122,31 +129,12 @@ export class Pipeline extends BaseVariant {
         });
     }
 
-    private validateInputs(inputs: unknown[], inputSpecs: OpIO[]): void {
-        for (let index = 0; index < inputSpecs.length; index++) {
-            const spec = inputSpecs[index];
-            const input = inputs[index] as { shape?: number[] } | null | undefined;
-            if (input === undefined || input === null || !input.shape || spec.shape.length === 0) {
-                continue;
-            }
-            if (
-                spec.shape.length !== input.shape.length ||
-                spec.shape.some(
-                    (extent, dimension) =>
-                        typeof extent === "number" && extent !== input.shape?.[dimension]
-                )
-            ) {
-                throw new Error(`Expected input shape [${spec.shape}], got [${input.shape}]`);
-            }
-        }
-    }
-
     private async nodeCompute(
         nodeInstance: PipelineNodeInstance,
         nodeInputs: unknown[],
         passthrough: Record<string, unknown>
     ): Promise<unknown> {
-        this.validateInputs(nodeInputs, nodeInstance.inputSpecs);
+        validateInputs(nodeInputs, nodeInstance.inputSpecs);
         return nodeInstance.operator.compute(
             nodeInputs,
             passthrough.dynamic_attributes as Record<string, string>

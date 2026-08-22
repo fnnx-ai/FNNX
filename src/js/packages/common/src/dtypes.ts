@@ -38,15 +38,24 @@ export class DtypesManager {
         return this.dtypes[name];
     }
 
-    validateDtype(name: string, data: unknown): void {
+    /**
+     * `rank` bounds the nesting the elements sit under. Without it a custom dtype whose values
+     * are JSON arrays cannot be told apart from another level of container nesting.
+     */
+    validateDtype(name: string, data: unknown, rank: number | null = null): void {
         const isCustom = Object.prototype.hasOwnProperty.call(this.dtypes, name);
         if (!isCustom && !IMPLICIT_TYPES.has(name)) {
             throw new Error(`Unknown dtype: ${name}`);
         }
 
-        if (Array.isArray(data)) {
+        if (rank === null ? Array.isArray(data) : rank > 0) {
+            if (!Array.isArray(data)) {
+                throw new TypeError(
+                    `Expected ${rank} more level(s) of nesting, got \`${implicitTypeOf(data)}\``
+                );
+            }
             for (const value of data) {
-                this.validateDtype(name, value);
+                this.validateDtype(name, value, rank === null ? null : rank - 1);
             }
             return;
         }
@@ -56,15 +65,25 @@ export class DtypesManager {
             return;
         }
 
-        const actualType = implicitTypeOf(data);
-        if (actualType !== name) {
-            throw new TypeError(`Invalid data type, expected \`${name}\`, got \`${actualType}\``);
+        if (!matchesImplicitType(name, data)) {
+            throw new TypeError(
+                `Invalid data type, expected \`${name}\`, got \`${implicitTypeOf(data)}\``
+            );
         }
     }
 
     validateJsonSchema(name: string, data: unknown): void {
         validateJsonSchema(data, this.getDtype(name));
     }
+}
+
+function matchesImplicitType(name: string, data: unknown): boolean {
+    // JSON.parse erases the fractional part of a whole number, so `2.0` and `2` reach us as the
+    // same JS value. `float` therefore accepts any number; `integer` still requires an integer.
+    if (name === "float") {
+        return typeof data === "number";
+    }
+    return implicitTypeOf(data) === name;
 }
 
 function implicitTypeOf(data: unknown): string {

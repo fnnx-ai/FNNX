@@ -217,6 +217,40 @@ describe("TarExtractor", () => {
         });
     });
 
+    describe("Character encoding", () => {
+        it("should decode a short non-ASCII member name as UTF-8", () => {
+            const name = "ops_artifacts/naïve_ops/modèle.onnx";
+            const header = createTarHeader(name, 4, 0x30);
+            const dataBlock = new Uint8Array(512);
+            dataBlock.set(new TextEncoder().encode("data"), 0);
+
+            const extractor = new TarExtractor(buildTarBuffer([header, dataBlock]));
+
+            expect(extractor.extract()[0].relpath).toBe(name);
+            expect(extractor.scan().has(name)).toBe(true);
+        });
+
+        it("should decode a non-ASCII ustar prefix as UTF-8", () => {
+            const header = createTarHeader("modèle.onnx", 4, 0x30, "ops_artifacts/naïve");
+            const dataBlock = new Uint8Array(512);
+            dataBlock.set(new TextEncoder().encode("data"), 0);
+
+            const extractor = new TarExtractor(buildTarBuffer([header, dataBlock]));
+
+            expect(extractor.extract()[0].relpath).toBe("ops_artifacts/naïve/modèle.onnx");
+        });
+    });
+
+    describe("Compressed archives", () => {
+        it("rejects a gzip-compressed archive", () => {
+            // The web reader accepts uncompressed archives only; a gzip stream is not a tar header.
+            const gzip = new Uint8Array(1024);
+            gzip.set([0x1f, 0x8b, 0x08, 0x00], 0);
+
+            expect(() => new TarExtractor(gzip.buffer).extract()).toThrowError(InvalidTarError);
+        });
+    });
+
     describe("Directory handling", () => {
         it("should recognize directory type", () => {
             // typeflag '5' = 0x35
@@ -446,6 +480,160 @@ describe("TarExtractor", () => {
 
             expect(files).toHaveLength(1);
             expect(files[0].relpath).toBe("pax/takes/priority.txt");
+        });
+    });
+
+    describe("ustar field boundaries", () => {
+        function nameOfLength(length: number): string {
+            const characters = Array.from({ length }, () => "a");
+            for (let index = 50; index < length - 1; index += 51) {
+                characters[index] = "/";
+            }
+            return characters.join("");
+        }
+
+        it("reads a name field that is exactly 100 bytes with no terminator", () => {
+            const name = nameOfLength(100);
+            const header = createTarHeader(name, 4, 0x30);
+            const data = new Uint8Array(512);
+            data.set(new TextEncoder().encode("data"), 0);
+
+            const files = new TarExtractor(buildTarBuffer([header, data])).extract();
+
+            expect(name).toHaveLength(100);
+            expect(files[0].relpath).toBe(name);
+        });
+
+        it("joins a 155-byte prefix to a 100-byte name", () => {
+            const prefix = nameOfLength(155);
+            const name = nameOfLength(100);
+            const header = createTarHeader(name, 4, 0x30, prefix);
+            const data = new Uint8Array(512);
+            data.set(new TextEncoder().encode("data"), 0);
+
+            const extractor = new TarExtractor(buildTarBuffer([header, data]));
+
+            expect(extractor.extract()[0].relpath).toBe(`${prefix}/${name}`);
+            expect(extractor.extract()[0].relpath).toHaveLength(256);
+            expect(extractor.scan().has(`${prefix}/${name}`)).toBe(true);
+        });
+    });
+
+    describe("repeated members", () => {
+        it("keeps the third of three occurrences", () => {
+            const blocks: Uint8Array[] = [];
+            for (const text of ["one", "two", "three"]) {
+                const bytes = new TextEncoder().encode(text);
+                const data = new Uint8Array(512);
+                data.set(bytes, 0);
+                blocks.push(createTarHeader("same.txt", bytes.length, 0x30), data);
+            }
+
+            const extractor = new TarExtractor(buildTarBuffer(blocks));
+            const files = extractor.extract();
+
+            expect(files).toHaveLength(1);
+            expect(new TextDecoder().decode(files[0].content)).toBe("three");
+            expect(extractor.scan().get("same.txt")).toEqual([2560, 5]);
+        });
+    });
+
+    describe("directory member tolerance", () => {
+        function fileBlocks(name: string, content: string): Uint8Array[] {
+            const bytes = new TextEncoder().encode(content);
+            const data = new Uint8Array(align512(bytes.length));
+            data.set(bytes, 0);
+            return [createTarHeader(name, bytes.length, 0x30), data];
+        }
+
+        it("accepts a nested member with no directory entry before it", () => {
+            const extractor = new TarExtractor(
+                buildTarBuffer(fileBlocks("ops_artifacts/predict/model.onnx", "weights"))
+            );
+
+            expect(extractor.extract().map((file) => file.relpath)).toEqual([
+                "ops_artifacts/predict/model.onnx",
+            ]);
+        });
+
+        it("accepts the same member preceded by its directory entries", () => {
+            const extractor = new TarExtractor(
+                buildTarBuffer([
+                    createTarHeader("ops_artifacts/", 0, 0x35),
+                    createTarHeader("ops_artifacts/predict/", 0, 0x35),
+                    ...fileBlocks("ops_artifacts/predict/model.onnx", "weights"),
+                ])
+            );
+
+            expect(extractor.extract().map((entry) => entry.type)).toEqual([
+                "directory",
+                "directory",
+                "file",
+            ]);
+            expect([...extractor.scan().keys()]).toEqual(["ops_artifacts/predict/model.onnx"]);
+        });
+    });
+
+    describe("mixed long-name conventions", () => {
+        function paxBlocks(paxPath: string): Uint8Array[] {
+            const recordContent = ` path=${paxPath}\n`;
+            const lengthPrefix = (
+                recordContent.length + String(recordContent.length).length
+            ).toString();
+            const paxData = new TextEncoder().encode(`${lengthPrefix}${recordContent}`);
+            const dataBlock = new Uint8Array(align512(paxData.length));
+            dataBlock.set(paxData, 0);
+            return [createTarHeader("PaxHeader/file", paxData.length, 0x78), dataBlock];
+        }
+
+        function gnuBlocks(longName: string): Uint8Array[] {
+            const bytes = new TextEncoder().encode(longName);
+            const dataBlock = new Uint8Array(align512(bytes.length));
+            dataBlock.set(bytes, 0);
+            return [createTarHeader("././@LongLink", bytes.length, 0x4c), dataBlock];
+        }
+
+        function memberBlocks(content: string): Uint8Array[] {
+            const bytes = new TextEncoder().encode(content);
+            const dataBlock = new Uint8Array(align512(bytes.length));
+            dataBlock.set(bytes, 0);
+            return [createTarHeader("short.txt", bytes.length, 0x30), dataBlock];
+        }
+
+        it("reads a PAX member and a GNU long-name member from one archive", () => {
+            const paxPath = "pax/named/member.bin";
+            const gnuPath = "gnu/named/member.bin";
+            const extractor = new TarExtractor(
+                buildTarBuffer([
+                    ...paxBlocks(paxPath),
+                    ...memberBlocks("pax data"),
+                    ...gnuBlocks(gnuPath),
+                    ...memberBlocks("gnu data"),
+                ])
+            );
+
+            const files = extractor.extract();
+
+            expect(files.map((file) => file.relpath)).toEqual([paxPath, gnuPath]);
+            expect(files.map((file) => new TextDecoder().decode(file.content))).toEqual([
+                "pax data",
+                "gnu data",
+            ]);
+        });
+
+        it("applies a long name to the next member only", () => {
+            const extractor = new TarExtractor(
+                buildTarBuffer([
+                    ...gnuBlocks("gnu/named/member.bin"),
+                    ...memberBlocks("first"),
+                    ...memberBlocks("second"),
+                ])
+            );
+
+            expect(extractor.extract().map((file) => file.relpath)).toEqual([
+                "gnu/named/member.bin",
+                "short.txt",
+            ]);
         });
     });
 

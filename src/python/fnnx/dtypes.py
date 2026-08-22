@@ -87,7 +87,9 @@ class DtypesManager:
                     f"Invalid data type, expected `boolean`, got `{dtype_name}`"
                 )
         elif isinstance(data, int):
-            if dtype_name != "integer":
+            # A whole JSON number also satisfies a declared `float`: some JSON
+            # parsers erase the 2.0/2 distinction, and core.md permits the leniency.
+            if dtype_name not in ("integer", "float"):
                 raise TypeError(
                     f"Invalid data type, expected `integer`, got `{dtype_name}`"
                 )
@@ -106,6 +108,10 @@ class NDContainer:
             raise ValueError("NDContainer does not support Array dtype")
         elif dtype.startswith("NDContainer["):
             dtype = dtype[12:-1]
+            if dtype.startswith("Array["):
+                raise ValueError(
+                    f"NDContainer inner dtype `{dtype}` must not be an Array[...] form"
+                )
 
         self.data = deepcopy(data if isinstance(data, list) else [data])
 

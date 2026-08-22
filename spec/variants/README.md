@@ -16,9 +16,9 @@ Open the document with the header table below. Then define, at minimum: the `var
 ```markdown
 # The `<key>` variant
 
-| Key | Added in | Updated in | Classification | Operations | Schema |
-| --- | --- | --- | --- | --- | --- |
-| `<key>` | <spec version> | <spec version> | <portability>, <durability> | No \| ALL \| <list of admitted operations> | [`variant_<key>.json`](../schemas/variant_<key>.json) |
+| Key | Added in | Updated in | Classification | Operations | Content types | Schema |
+| --- | --- | --- | --- | --- | --- | --- |
+| `<key>` | <spec version> | <spec version> | <portability>, <durability> | No \| ALL \| <list of admitted operations> | <list of permitted content types> | [`variant_<key>.json`](../schemas/variant_<key>.json) |
 ```
 
 Also: add the variant to the table above, add its schema under [`../schemas/`](../schemas/), and add its classification to [`../compatibility.md`](../compatibility.md).

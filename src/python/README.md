@@ -17,7 +17,7 @@ The package provides extras for features with additional dependencies.
 | `core` | NumPy arrays and `ONNX_v1` execution with [ONNX Runtime](https://onnxruntime.ai/docs/). |
 | `extras` | `Reader`, `PyfuncBuilder`, and local MLflow model conversion. |
 | `mlflow` | Remote MLflow URI resolution and conversion verification. |
-| `compiler` | Compilation of ONNX models and FNNX pipeline artifacts to C99. |
+| `compiler` | Compilation of pipeline artifacts to C99. |
 
 Combine extras when one application needs several features.
 
@@ -184,12 +184,12 @@ Remote URIs and `verify=True` require the `mlflow` extra. Verification loads the
 
 Use `input_specs` or `output_specs` when the inferred interface is not suitable. The converter stores the source MLflow model inside the artifact.
 
-## Compiling ONNX to C
+## Compiling an artifact to C
 
-The compiler accepts a standalone [ONNX](https://onnx.ai/onnx/) model or an FNNX pipeline artifact. It writes one C99 header and one JSON report.
+The compiler turns a pipeline artifact into one self-contained C99 header and one JSON report. The result runs without a Python interpreter and without a runtime library.
 
 ```console
-uv run python -m fnnx.extras.compilers.c model.onnx \
+uv run python -m fnnx.extras.compilers.c model.fnnx \
     --output-dir build/model-c \
     --runtime-dim batch=64 \
     --prefix model

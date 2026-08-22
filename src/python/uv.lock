@@ -1024,8 +1024,8 @@ wheels = [
 
 [[package]]
 name = "fnnx"
-version = "0.0.13"
-source = { virtual = "." }
+version = "0.1.0"
+source = { editable = "." }
 
 [package.optional-dependencies]
 compiler = [

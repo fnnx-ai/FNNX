@@ -284,6 +284,8 @@ class PyfuncBuilder:
 
 class File:
     def __init__(self, path):
+        # The PAX default writes plain ustar headers, and falls back to a PAX `path`
+        # record only for a name too long for the ustar name and prefix fields.
         self.tar = tarfile.open(path, "w")
 
     def make_artifacts_folders(self):
@@ -299,12 +301,20 @@ class File:
         self.tar.addfile(info, data)
 
     def copy(self, src, dst, should_exclude_pycache: bool = False):
-        def exclude_pycache(tarinfo):
+        def prepare(tarinfo):
             if "__pycache__" in tarinfo.name and should_exclude_pycache:
                 return None
+            # A fractional mtime has no ustar field, and would force a PAX header
+            # member; so would a uid or gid above the octal field's range. Zeroed
+            # ownership also keeps the archive reproducible across build machines.
+            tarinfo.mtime = int(tarinfo.mtime)
+            tarinfo.uid = 0
+            tarinfo.gid = 0
+            tarinfo.uname = ""
+            tarinfo.gname = ""
             return tarinfo
 
-        self.tar.add(src, dst, filter=exclude_pycache)
+        self.tar.add(src, dst, filter=prepare)
 
     def close(self):
         self.tar.close()
