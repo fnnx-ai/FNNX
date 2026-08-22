@@ -2,7 +2,7 @@ packages:
   - 'packages/*'
 
 
-ignoredBuiltDependencies:
-  - esbuild
-  - onnxruntime-node
-  - protobufjs
+allowBuilds:
+  esbuild: false
+  onnxruntime-node: false
+  protobufjs: false
