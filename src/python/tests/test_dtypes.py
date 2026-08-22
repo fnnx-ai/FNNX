@@ -1,5 +1,11 @@
+import json
+from pathlib import Path
+import tempfile
 import unittest
-from fnnx.dtypes import DtypesManager, NDContainer, BUILTINS
+
+from fnnx.device import DeviceMap
+from fnnx.dtypes import BUILTINS, DtypesManager, NDContainer
+from fnnx.handlers.local import LocalHandler, LocalHandlerConfig
 
 
 class TestDtypesManager(unittest.TestCase):
@@ -39,6 +45,76 @@ class TestDtypesManager(unittest.TestCase):
         with self.assertRaises(ValueError):
             DtypesManager({"Invalid[Name]": {}}, {})
 
+    def test_boolean_is_distinct_from_integer_and_float(self) -> None:
+        value = NDContainer([True, False], "NDContainer[boolean]", self.manager)
+
+        self.assertEqual(value.data, [True, False])
+
+        with self.assertRaises(TypeError):
+            self.manager.validate_dtype("integer", True)
+        with self.assertRaises(TypeError):
+            self.manager.validate_dtype("float", True)
+        for invalid_value in (1, 1.0, "true", None):
+            with self.subTest(invalid_value=invalid_value), self.assertRaises(TypeError):
+                self.manager.validate_dtype("boolean", invalid_value)
+
+    def test_float_accepts_a_whole_number(self) -> None:
+        self.manager.validate_dtype("float", 2)
+        self.manager.validate_dtype("float", 2.5)
+
+        value = NDContainer([2, 2.5], "NDContainer[float]", self.manager)
+        self.assertEqual(value.data, [2, 2.5])
+
+        with self.assertRaises(TypeError):
+            self.manager.validate_dtype("integer", 2.0)
+
+    def test_all_reserved_dtype_names_are_rejected(self) -> None:
+        reserved_names = {
+            "string",
+            "integer",
+            "float",
+            "boolean",
+            "Array",
+            "NDContainer",
+            "float32",
+            "float64",
+            "int32",
+            "int64",
+            "bool",
+        }
+
+        for name in reserved_names:
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                DtypesManager({name: {}}, {})
+
+    def test_artifact_load_rejects_boolean_dtype_redefinition(self) -> None:
+        documents = {
+            "manifest.json": {
+                "variant": "pipeline",
+                "producer_name": "tests",
+                "producer_version": "1.0",
+                "producer_tags": [],
+                "inputs": [],
+                "outputs": [],
+                "dynamic_attributes": [],
+                "env_vars": [],
+            },
+            "ops.json": [],
+            "variant_config.json": {"nodes": []},
+            "dtypes.json": {"boolean": {}},
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            artifact = Path(temporary_directory)
+            for filename, document in documents.items():
+                (artifact / filename).write_text(json.dumps(document), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "boolean"):
+                LocalHandler(
+                    str(artifact),
+                    DeviceMap(accelerator="cpu", node_device_map={}),
+                    LocalHandlerConfig(auto_cleanup=False),
+                )
+
 
 class TestNDContainer(unittest.TestCase):
     def setUp(self):
@@ -68,6 +144,10 @@ class TestNDContainer(unittest.TestCase):
         data = [[{"num": 1}, {"num": 1}], [{"num": 1}, {"num": 1}]]
         nd = NDContainer(data, "NDContainer[Number]", self.dtype_manager)
         self.assertEqual(nd.shape, (2, 2))
+
+    def test_initialization_with_array_inner_dtype(self):
+        with self.assertRaisesRegex(ValueError, r"Array\[float32\]"):
+            NDContainer([[1.0]], "NDContainer[Array[float32]]", self.dtype_manager)
 
     def test_get_item_single_index(self):
         data = [1, 2, 3]

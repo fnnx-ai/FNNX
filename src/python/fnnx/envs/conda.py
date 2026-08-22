@@ -12,20 +12,26 @@ import shutil
 import platform
 import subprocess
 import tempfile
+from typing import Any
 
 
 class CondaLikeEnvManager(BaseEnvManager):
-    def __init__(self, env_spec: dict, accelerator: str | None = None):
+    def __init__(
+        self, env_spec: dict[str, Any], accelerator: str | None = None
+    ) -> None:
         self._exe = self._get_exe()
         self.env_spec = env_spec
-        self.accelerator = (accelerator or "cpu").lower()
-        self.channels = env_spec.get("conda_channels") or ["conda-forge"]
+        self.accelerator = ("cpu" if accelerator is None else accelerator).lower()
+        channels = env_spec.get("conda_channels", ["conda-forge"])
+        self.channels: list[str] = [] if channels is None else list(channels)
 
-        self.python_version = env_spec.get("python_version") or get_python_version(
-            micro=False
+        self.python_version = (
+            env_spec["python_version"]
+            if "python_version" in env_spec
+            else get_python_version(micro=False)
         )
-        self.build_deps = env_spec.get("build_dependencies") or []
-        deps = env_spec.get("dependencies") or []
+        self.build_deps: list[str] = list(env_spec.get("build_dependencies", []))
+        deps: list[dict[str, Any]] = list(env_spec.get("dependencies", []))
 
         if not deps:
             deps.append({"package": "fnnx[core]"})

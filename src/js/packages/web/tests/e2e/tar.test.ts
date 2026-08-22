@@ -13,6 +13,11 @@ test.describe('TarExtractor E2E Tests', () => {
     const html = `
       <!DOCTYPE html>
       <html>
+      <head>
+        <script type="importmap">
+          {"imports":{"@fnnx-ai/common":"/common/index.js"}}
+        </script>
+      </head>
       <body>
         <script type="module">
           import { TarExtractor } from '/dist/tar.js';
@@ -37,6 +42,25 @@ test.describe('TarExtractor E2E Tests', () => {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath);
         route.fulfill({ status: 200, contentType: 'application/javascript', body: content });
+      } else {
+        route.fulfill({ status: 404, body: 'Not found' });
+      }
+    });
+
+    await page.route('**/common/**', route => {
+      const url = new URL(route.request().url());
+      const relativePath = url.pathname.replace(/^\/common\//, '');
+      const filePath = path.join(
+        __dirname,
+        '../../../common/dist',
+        relativePath
+      );
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/javascript',
+          body: fs.readFileSync(filePath),
+        });
       } else {
         route.fulfill({ status: 404, body: 'Not found' });
       }

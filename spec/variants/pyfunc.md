@@ -1,8 +1,8 @@
 # The `pyfunc` variant
 
-| Key | Added in | Updated in | Classification | Operations | Schema |
-| --- | --- | --- | --- | --- | --- |
-| `pyfunc` | 0.0.4 | 0.1.0 | Weak portability, Weak execution durability | ALL | [`variant_pyfunc.json`](../schemas/variant_pyfunc.json) |
+| Key | Added in | Updated in | Classification | Operations | Content types | Schema |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pyfunc` | 0.1.0 | 0.1.0 | Weak portability, Weak execution durability | ALL | `NDJSON`, `JSON` | [`variant_pyfunc.json`](../schemas/variant_pyfunc.json) |
 
 The `pyfunc` variant packages a Python function as an FNNX artifact. A consumer imports the entry module and constructs the class it defines. It then warms the instance up, and calls it with the artifact's declared inputs.
 

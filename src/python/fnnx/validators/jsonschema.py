@@ -38,57 +38,57 @@ def resolve_refs(schema, definitions, seen=None):
         return schema
 
 
-def _validate(instance, schema, definitions):
-    if "const" in schema:
-        if instance != schema["const"]:
-            raise ValueError(f'Value {instance} does not match const {schema["const"]}')
-        return
-    if "enum" in schema:
-        if instance not in schema["enum"]:
-            raise ValueError(f'Value {instance} is not in enum {schema["enum"]}')
-        return
-    if "not" in schema:
-        try:
-            _validate(instance, schema["not"], definitions)
-        except ValueError:
-            pass  # Valid because instance does not match 'not' schema
-        else:
-            raise ValueError('Instance should not match schema in "not"')
+def _matches(instance, schema, definitions):
+    try:
+        _validate(instance, schema, definitions)
+    except ValueError:
+        return False
+    return True
+
+
+def _validate_const_and_enum(instance, schema):
+    if "const" in schema and instance != schema["const"]:
+        raise ValueError(f'Value {instance} does not match const {schema["const"]}')
+    if "enum" in schema and instance not in schema["enum"]:
+        raise ValueError(f'Value {instance} is not in enum {schema["enum"]}')
+
+
+def _validate_composition(instance, schema, definitions):
+    if "not" in schema and _matches(instance, schema["not"], definitions):
+        raise ValueError('Instance should not match schema in "not"')
     if "anyOf" in schema:
-        for subschema in schema["anyOf"]:
-            try:
-                _validate(instance, subschema, definitions)
-                return
-            except ValueError:
-                continue
-        raise ValueError(f"Value {instance} does not match any of the schemas in anyOf")
+        if not any(
+            _matches(instance, subschema, definitions) for subschema in schema["anyOf"]
+        ):
+            raise ValueError(
+                f"Value {instance} does not match any of the schemas in anyOf"
+            )
     if "allOf" in schema:
         for subschema in schema["allOf"]:
             _validate(instance, subschema, definitions)
-        return
     if "oneOf" in schema:
-        match_count = 0
-        for subschema in schema["oneOf"]:
-            try:
-                _validate(instance, subschema, definitions)
-                match_count += 1
-            except ValueError:
-                continue
+        match_count = sum(
+            _matches(instance, subschema, definitions) for subschema in schema["oneOf"]
+        )
         if match_count != 1:
             raise ValueError(
                 f"Value {instance} must match exactly one schema in oneOf, but matched {match_count}"
             )
-        return
     if "if" in schema:
-        if_subschema = schema["if"]
-        then_subschema = schema.get("then", {})
-        else_subschema = schema.get("else", {})
-        try:
-            _validate(instance, if_subschema, definitions)
-            _validate(instance, then_subschema, definitions)
-        except ValueError:
-            _validate(instance, else_subschema, definitions)
-        return
+        branch = (
+            schema.get("then")
+            if _matches(instance, schema["if"], definitions)
+            else schema.get("else")
+        )
+        if branch is not None:
+            _validate(instance, branch, definitions)
+
+
+def _validate(instance, schema, definitions):
+    # Every in-subset keyword of a schema object is enforced, so a composition keyword
+    # never shadows a sibling such as `type` or `required`.
+    _validate_const_and_enum(instance, schema)
+    _validate_composition(instance, schema, definitions)
     if "type" in schema:
         expected_types = schema["type"]
         if not isinstance(expected_types, list):
@@ -155,16 +155,15 @@ def _validate_object(instance, schema, definitions):
         for pattern, subschema in schema["patternProperties"].items():
             regex = re.compile(pattern)
             for prop in instance:
-                if regex.match(prop):
+                if regex.search(prop):
                     _validate(instance[prop], subschema, definitions)
     if "additionalProperties" in schema:
         allowed_props = set(schema.get("properties", {}).keys())
-        pattern_props = set()
+        pattern_props: set[str] = set()
         if "patternProperties" in schema:
-            pattern_props = set()
             for pattern in schema["patternProperties"]:
                 for prop in instance:
-                    if re.match(pattern, prop):
+                    if re.search(pattern, prop):
                         pattern_props.add(prop)
         extra_props = set(instance.keys()) - allowed_props - pattern_props
 
@@ -202,8 +201,9 @@ def _validate_array(instance, schema, definitions):
                 f'Array has {length} items, which is more than maxItems {schema["maxItems"]}'
             )
     if "uniqueItems" in schema and schema["uniqueItems"]:
-        seen = set()
+        seen: set[object] = set()
         for item in instance:
+            item_hash: object
             if isinstance(item, dict):
                 item_hash = frozenset(item.items())
             elif isinstance(item, list):
@@ -247,7 +247,7 @@ def _validate_string(instance, schema):
                 f'String length {length} is more than maxLength {schema["maxLength"]}'
             )
     if "pattern" in schema:
-        if not re.match(schema["pattern"], instance):
+        if not re.search(schema["pattern"], instance):
             raise ValueError(f'String does not match pattern {schema["pattern"]}')
     if "format" in schema:
         format = schema["format"]

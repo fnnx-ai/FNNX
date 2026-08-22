@@ -1,5 +1,5 @@
 import unittest
-from fnnx.extras.jsonpatcher import apply_patches
+from fnnx.jsonpatcher import apply_patches
 
 
 class TestApplyPatches(unittest.TestCase):
@@ -253,7 +253,7 @@ class TestEdgeCases(unittest.TestCase):
 
     def test_empty_operations_in_patch(self):
         doc = {"foo": "bar"}
-        patch = []
+        patch: list[dict[str, object]] = []
         result = apply_patches(doc, [patch])
         self.assertEqual(result, {"foo": "bar"})
 

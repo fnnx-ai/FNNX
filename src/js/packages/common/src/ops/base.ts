@@ -1,74 +1,75 @@
-import { DeviceConfig, OpDynamicAttribute, OpIO, TarFileContent } from '../interfaces';
-import { DtypesManager } from '../ndarray';
+import { ArtifactFile } from "../artifact.js";
+import { DtypesManager } from "../dtypes.js";
+import { OpDynamicAttribute, OpIO } from "../interfaces.js";
 
 export interface OpOutput {
-    value: any[];
-    metadata?: Record<string, any>;
+    value: unknown[];
+    metadata?: Record<string, unknown>;
+}
+
+export interface OpRuntimeConfig {
+    op_instance_id: string;
+    attributes: Record<string, unknown>;
+    dynamic_attributes: Record<string, OpDynamicAttribute>;
+    inputs: OpIO[];
+    outputs: OpIO[];
+    dtypes_manager: DtypesManager;
 }
 
 export abstract class BaseOp {
-    protected static supportedDynamicAttributes: string[] = [];
     protected static requiredDynamicAttributes: string[] = [];
 
-    protected dynamicAttributeMap: Record<string, OpDynamicAttribute>;
-    protected warmedUp: boolean = false;
-    protected artifacts: TarFileContent[];
-    protected deviceConfig: DeviceConfig;
-    protected attributes: Record<string, any>;
-    protected inputSpecs: OpIO[];
-    protected outputSpecs: OpIO[];
-    protected dtypesManager: DtypesManager;
+    protected readonly artifacts: ArtifactFile[];
+    protected readonly attributes: Record<string, unknown>;
+    protected readonly inputSpecs: OpIO[];
+    protected readonly outputSpecs: OpIO[];
+    protected readonly dtypesManager: DtypesManager;
+    protected readonly opInstanceId: string;
+    private readonly dynamicAttributeMap: Record<string, OpDynamicAttribute>;
+    private warmedUp = false;
 
-    constructor(
-        artifacts: TarFileContent[],
-        config: {
-            attributes: Record<string, any>;
-            dynamicAttributeMap: Record<string, OpDynamicAttribute>;
-            deviceConfig: DeviceConfig;
-            inputSpecs: OpIO[];
-            outputSpecs: OpIO[];
-            dtypesManager: DtypesManager;
-        }
-    ) {
-        this.dynamicAttributeMap = config.dynamicAttributeMap;
+    constructor(artifacts: ArtifactFile[], config: OpRuntimeConfig) {
         this.artifacts = artifacts;
-        this.deviceConfig = config.deviceConfig;
         this.attributes = config.attributes;
-        this.inputSpecs = config.inputSpecs;
-        this.outputSpecs = config.outputSpecs;
-        this.dtypesManager = config.dtypesManager;
+        this.dynamicAttributeMap = config.dynamic_attributes;
+        this.inputSpecs = config.inputs;
+        this.outputSpecs = config.outputs;
+        this.dtypesManager = config.dtypes_manager;
+        this.opInstanceId = config.op_instance_id;
     }
 
-    abstract warmup(...args: any[]): Promise<BaseOp>;
+    abstract warmup(): Promise<this>;
 
-    abstract compute(
-        inputs: any[],
-        dynamicAttributes: Record<string, any>,
-        ...args: any[]
+    async compute(inputs: unknown[], dynamicAttributes: Record<string, string>): Promise<OpOutput> {
+        const resolvedAttributes = this.resolveDynamicAttributes(dynamicAttributes);
+        this.verifyRequiredDynamicAttributes(resolvedAttributes);
+        return this.run(inputs, resolvedAttributes);
+    }
+
+    protected abstract run(
+        inputs: unknown[],
+        dynamicAttributes: Record<string, string>
     ): Promise<OpOutput>;
 
-    protected extractDynamicAttribute(
-        dynamicAttributes: Record<string, any>
-    ): Record<string, any> {
-        const extracted: Record<string, any> = {};
-
-        for (const [key, value] of Object.entries(this.dynamicAttributeMap)) {
-            const sourceName = value.name;
-            const defaultValue = value.defaultValue;
-            const sourceValue = sourceName ? dynamicAttributes[sourceName] : undefined;
-            const targetValue = sourceValue ?? defaultValue;
-            extracted[key] = targetValue;
+    private resolveDynamicAttributes(
+        dynamicAttributes: Record<string, string>
+    ): Record<string, string> {
+        const resolved: Record<string, string> = {};
+        for (const [internalName, declaration] of Object.entries(this.dynamicAttributeMap)) {
+            resolved[internalName] = Object.prototype.hasOwnProperty.call(
+                dynamicAttributes,
+                declaration.name
+            )
+                ? dynamicAttributes[declaration.name]
+                : declaration.default_value;
         }
-
-        return extracted;
+        return resolved;
     }
 
-    protected verifyRequiredDynamicAttributes(
-        dynamicAttributesMap: Record<string, any>
-    ): void {
-        for (const key of (this.constructor as typeof BaseOp).requiredDynamicAttributes) {
-            if (!(key in dynamicAttributesMap)) {
-                throw new Error(`Missing required dynamic attribute: ${key}`);
+    private verifyRequiredDynamicAttributes(dynamicAttributes: Record<string, string>): void {
+        for (const name of (this.constructor as typeof BaseOp).requiredDynamicAttributes) {
+            if (!(name in dynamicAttributes) || dynamicAttributes[name] === undefined) {
+                throw new Error(`Missing required dynamic attribute: ${name}`);
             }
         }
     }
@@ -82,12 +83,4 @@ export abstract class BaseOp {
     }
 }
 
-export type ConcreteOp = new (artifacts: TarFileContent[],
-    config: {
-        attributes: Record<string, any>;
-        dynamicAttributeMap: Record<string, OpDynamicAttribute>;
-        deviceConfig: DeviceConfig;
-        inputSpecs: OpIO[];
-        outputSpecs: OpIO[];
-        dtypesManager: DtypesManager;
-    }) => BaseOp;
+export type ConcreteOp = new (artifacts: ArtifactFile[], config: OpRuntimeConfig) => BaseOp;

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -202,6 +202,148 @@ describe("Model reader: manifest patches", () => {
         model.cleanup();
     });
 
+    it("keeps only the last repeated manifest and metadata members", async () => {
+        const replacement = { ...BASE_MANIFEST, description: "last manifest" };
+        const firstMetadata = [
+            {
+                id: "first",
+                producer: "tests",
+                producer_version: "1",
+                producer_tags: [],
+                payload: {},
+            },
+        ];
+        const lastMetadata = [
+            {
+                id: "last",
+                producer: "tests",
+                producer_version: "1",
+                producer_tags: [],
+                payload: {},
+            },
+        ];
+        const tar = createMultiFileTar([
+            ...makeBaseFiles({ meta: [] }),
+            { name: "meta-x.json", content: JSON.stringify(firstMetadata) },
+            { name: "manifest.json", content: JSON.stringify(replacement) },
+            { name: "meta-x.json", content: JSON.stringify(lastMetadata) },
+        ]);
+
+        const model = await Model.fromBuffer(Buffer.from(tar));
+
+        expect(model.getManifest().description).toBe("last manifest");
+        expect(model.getMetadata().map((entry) => entry.id)).toEqual(["last"]);
+        model.cleanup();
+    });
+
+    it("applies ordered patches and tolerates malformed metadata in a local tar fixture", async () => {
+        const patchB = [{ op: "replace", path: "/description", value: "patch-b" }];
+        const patchA = [{ op: "replace", path: "/description", value: "patch-a" }];
+        const metadata = (id: string): object => ({
+            id,
+            producer: "tests",
+            producer_version: "1",
+            producer_tags: [],
+            payload: {},
+        });
+        const tar = createMultiFileTar([
+            ...makeBaseFiles({ meta: [metadata("base")] }),
+            { name: "manifest-b.patch.json", content: JSON.stringify(patchB) },
+            { name: "manifest-a.patch.json", content: JSON.stringify(patchA) },
+            { name: "meta-b.json", content: JSON.stringify([metadata("b")]) },
+            {
+                name: "meta-a.json",
+                content: JSON.stringify([
+                    {
+                        id: "invalid",
+                        producer_version: "1",
+                        producer_tags: [],
+                        payload: {},
+                    },
+                    metadata("a"),
+                ]),
+            },
+            { name: "meta-bad.json", content: "{" },
+        ]);
+        const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        let model: Model | undefined;
+        try {
+            model = await Model.fromBuffer(Buffer.from(tar));
+
+            expect(model.getManifest().description).toBe("patch-b");
+            expect(model.getMetadata().map((entry) => entry.id)).toEqual(["base", "a", "b"]);
+            expect(warning).toHaveBeenCalledWith(expect.stringContaining("meta-bad.json"));
+        } finally {
+            model?.cleanup();
+            warning.mockRestore();
+        }
+    });
+
+    it("orders patch files by UTF-8 byte value, not by directory listing order", async () => {
+        const dir = makeDirFromFiles(makeBaseFiles({
+            extraFiles: [
+                { name: "manifest-a.patch.json", content: JSON.stringify([{ op: "replace", path: "/description", value: "lower" }]) },
+                { name: "manifest-B.patch.json", content: JSON.stringify([{ op: "replace", path: "/description", value: "upper" }]) },
+            ],
+        }));
+        const model = await Model.fromPath(dir);
+        expect(model.getManifest().description).toBe("lower");
+    });
+
+    it.each(["remove", "move", "copy", "test"])(
+        "should abort the load on a patch file that uses %s",
+        async (operation) => {
+            const dir = makeDirFromFiles(makeBaseFiles({
+                extraFiles: [
+                    {
+                        name: "manifest-001.patch.json",
+                        content: JSON.stringify([
+                            { op: operation, path: "/description", from: "/variant", value: "x" },
+                        ]),
+                    },
+                ],
+            }));
+            await expect(Model.fromPath(dir)).rejects.toThrow(
+                new RegExp(`Unsupported JSON Patch op.*${operation}`)
+            );
+        }
+    );
+
+    it("should keep the last of three repeated members", async () => {
+        const first = { ...BASE_MANIFEST, description: "first" };
+        const second = { ...BASE_MANIFEST, description: "second" };
+        const third = { ...BASE_MANIFEST, description: "third" };
+        const tar = createMultiFileTar([
+            { name: "manifest.json", content: JSON.stringify(first) },
+            { name: "ops.json", content: "[]" },
+            { name: "variant_config.json", content: JSON.stringify({ nodes: [] }) },
+            { name: "meta.json", content: "[]" },
+            { name: "manifest.json", content: JSON.stringify(second) },
+            { name: "manifest.json", content: JSON.stringify(third) },
+        ]);
+
+        const model = await Model.fromBuffer(Buffer.from(tar));
+
+        expect(model.getManifest().description).toBe("third");
+        model.cleanup();
+    });
+
+    it("should ignore unknown root files and unknown directories", async () => {
+        const dir = makeDirFromFiles(makeBaseFiles({
+            extraFiles: [
+                { name: "README.md", content: "not part of the spec" },
+                { name: "unknown.json", content: '{"ignored": true}' },
+                { name: "future_directory/payload.bin", content: "binary" },
+                { name: "meta_artifacts/orphan/data.json", content: "{}" },
+            ],
+        }));
+
+        const model = await Model.fromPath(dir);
+
+        expect(model.getManifest().description).toBe("test model");
+        expect(model.getMetadata().map((entry) => entry.id)).toEqual(["entry1"]);
+    });
+
     it("should replace a nested value in inputs via patch", async () => {
         const patch = [
             { op: "replace", path: "/inputs/0/dtype", value: "Array[int32]" },
@@ -367,6 +509,70 @@ describe("Model reader: multi-file metadata", () => {
         const model = await Model.fromPath(dir);
         const metadata = model.getMetadata();
         expect(metadata).toEqual([]);
+    });
+
+    it("should order sidecars by UTF-8 byte value with meta.json first", async () => {
+        const entry = (id: string): object => ({
+            id,
+            producer: "p",
+            producer_version: "1.0.0",
+            producer_tags: [],
+            payload: {},
+        });
+        const dir = makeDirFromFiles(makeBaseFiles({
+            meta: [entry("base")],
+            extraFiles: [
+                { name: "meta-a.json", content: JSON.stringify([entry("lower")]) },
+                { name: "meta-B.json", content: JSON.stringify([entry("upper")]) },
+            ],
+        }));
+        const model = await Model.fromPath(dir);
+        expect(model.getMetadata().map((m) => m.id)).toEqual(["base", "upper", "lower"]);
+    });
+
+    it("should skip a sidecar that is not a JSON array and read the rest", async () => {
+        const entry = (id: string): object => ({
+            id,
+            producer: "p",
+            producer_version: "1.0.0",
+            producer_tags: [],
+            payload: {},
+        });
+        const dir = makeDirFromFiles(makeBaseFiles({
+            meta: [entry("base")],
+            extraFiles: [
+                { name: "meta-a.json", content: '{"not":"an array"}' },
+                { name: "meta-b.json", content: JSON.stringify([entry("kept")]) },
+            ],
+        }));
+        const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        try {
+            const model = await Model.fromPath(dir);
+            expect(model.getMetadata().map((m) => m.id)).toEqual(["base", "kept"]);
+            expect(warning).toHaveBeenCalledWith(expect.stringContaining("meta-a.json"));
+        } finally {
+            warning.mockRestore();
+        }
+    });
+
+    it("should not match meta-.json, meta.json.bak or metadata.json", async () => {
+        const entry = (id: string): object => ({
+            id,
+            producer: "p",
+            producer_version: "1.0.0",
+            producer_tags: [],
+            payload: {},
+        });
+        const dir = makeDirFromFiles(makeBaseFiles({
+            meta: [],
+            extraFiles: [
+                { name: "meta-.json", content: JSON.stringify([entry("dash")]) },
+                { name: "meta.json.bak", content: JSON.stringify([entry("backup")]) },
+                { name: "metadata.json", content: JSON.stringify([entry("metadata")]) },
+            ],
+        }));
+        const model = await Model.fromPath(dir);
+        expect(model.getMetadata()).toEqual([]);
     });
 
     it("should load multi-file metadata from buffer", async () => {

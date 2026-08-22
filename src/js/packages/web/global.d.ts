@@ -1,12 +1,16 @@
-import type { Model as FnnxModel } from '../web/src/index.ts';
-import type { TarExtractor as FnnxTarExtractor } from '../web/src/tar.ts';
+import type {
+    Model as FnnxModel,
+    NDArray as FnnxNDArray,
+    TarExtractor as FnnxTarExtractor,
+} from "./src/index.ts";
 
 declare global {
   interface Window {
-    Model: typeof FnnxModel;
-    TarExtractor: typeof FnnxTarExtractor;
-    testResults?: Record<string, any>;
-  }
+        Model: typeof FnnxModel;
+        NDArray: typeof FnnxNDArray;
+        TarExtractor: typeof FnnxTarExtractor;
+        testResults?: Record<string, any>;
+    }
 }
 
 export {};

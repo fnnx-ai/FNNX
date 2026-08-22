@@ -1,10 +1,10 @@
 # client.py
-import json
 import atexit
-import queue
-import threading
 import itertools
+import json
+import queue
 import subprocess
+import threading
 from collections import deque
 
 
@@ -25,7 +25,7 @@ class StdIOClient:
         self._id_counter = itertools.count(1)
         self._closed = False
 
-        self._stderr_buf = deque(maxlen=200)
+        self._stderr_buf: deque[str] = deque(maxlen=200)
 
         def _stderr_reader():
             if self.proc.stderr is None:
@@ -83,7 +83,7 @@ class StdIOClient:
             self._inflight[rid] = waitq
 
         envelope = {"id": rid, "handler": handler, "body": body}
-        line = json.dumps(envelope) + "\n"
+        line = json.dumps(envelope, allow_nan=False) + "\n"
 
         try:
             with self._write_lock:

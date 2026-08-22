@@ -146,7 +146,6 @@ def _op_attributes(model_path: Path) -> dict[str, Any]:
             {"domain": opset.domain or "ai.onnx", "version": opset.version}
             for opset in model.opset_import
         ],
-        "requires_ort_extensions": False,
         "has_external_data": False,
         "onnx_ir_version": model.ir_version,
     }

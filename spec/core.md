@@ -195,7 +195,7 @@ The value is carried as nested JSON arrays. Each level of nesting is one dimensi
 
 ### Implicit scalar dtypes
 
-Four implicit scalar dtypes are always available, and producers MUST NOT declare them in `dtypes.json`. `string` matches a JSON string. `integer` matches a JSON integer. `float` matches a JSON number with a fractional part. `boolean` matches a JSON boolean. A boolean is not an integer.
+Four implicit scalar dtypes are always available, and producers MUST NOT declare them in `dtypes.json`. `string` matches a JSON string. `integer` matches a JSON integer. `float` matches a JSON number with a fractional part, and producers MUST write the fractional part, as in `2.0`. Consumers MAY also accept a whole JSON number where `float` is declared, because some JSON parsers do not preserve the distinction between `2.0` and `2`. `boolean` matches a JSON boolean. A boolean is not an integer.
 
 ### Custom dtypes
 
@@ -288,6 +288,8 @@ An entry MAY have auxiliary files under `meta_artifacts/<entry-id>/`, where `<en
 
 Ids are often derived from a tag or another identifier that contains path-unsafe characters. The convention replaces `:` with `~c~` and `/` with `~s~`. It then joins the escaped prefix to a unique suffix with the separator `~~et~~`, giving `<escaped-prefix>~~et~~<unique-suffix>`. The suffix is typically 32 hexadecimal characters from a UUID.
 
+The embedded prefix is a discovery aid. An artifact can carry many metadata files, and an entry's auxiliary files live under a directory named by its id. A reader that lists `meta_artifacts/` can find an entry from the directory name alone, without opening any metadata file.
+
 *Note: this escaping is not reversible in general, because `~` itself is not escaped. Consumers SHOULD treat entry ids as opaque identifiers and select entries by inspecting the entry object, in particular its `producer_tags`.*
 
 ## Tags
@@ -296,7 +298,7 @@ Tags appear in `manifest.producer_tags`, in the `tags` field of manifest IO entr
 
 A tag is an opaque string compared by exact equality. Consumers MUST NOT attach meaning to a prefix, a suffix, a substring or a separator inside a tag. Consumers MUST NOT case-fold before comparing. Consumers MUST ignore tags they do not recognize.
 
-The RECOMMENDED grammar for tags intended to be recognized outside the producing system is `<domain>[/<segment>]::<name>:v<N>`, as in `example.org::model_card:v1`. `<domain>` is a DNS-style namespace, controlled by whoever defines the tag. The optional `/<segment>` narrows the namespace. `<name>` identifies the meaning. `v<N>` versions it. Tags are compared exactly, so a changed meaning needs a new tag rather than a redefinition.
+The RECOMMENDED grammar for tags intended to be recognized outside the producing system is `<namespace>::<name>`, as in `example.org::model_card:v1`. `<namespace>` names a web resource that the tag's definer controls. The resource can be a domain. It can also be a path under a shared host, such as a `github.com/<owner>/<repo>` repository, which is easier to obtain than a domain and is still uniquely controlled. `<name>` identifies the meaning. Qualifiers separated by `:` MAY follow the name. A version such as `v<N>` is the suggested first qualifier. Tags are compared exactly, so a changed meaning needs a new tag rather than a redefinition.
 
 This specification standardizes the grammar and the comparison rule only. It never assigns meaning to a particular tag.
 

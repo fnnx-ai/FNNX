@@ -1,29 +1,33 @@
 try:
     import numpy as np  # type: ignore
 except ImportError:
-    np = None
-from os.path import join as pjoin
-from shutil import rmtree
+    np = None  # type: ignore[assignment]
 import atexit
-import json
-from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
-from typing import Type
+from dataclasses import dataclass
+from shutil import rmtree
+from typing import Any
+
+from fnnx.artifact import io_specs_by_name, load_effective_manifest, load_root_json
 from fnnx.device import DeviceMap
-from fnnx.dtypes import DtypesManager, BUILTINS, NDContainer
-from fnnx.variants.pipeline import Pipeline
+from fnnx.dtypes import (
+    BUILTINS,
+    DtypesManager,
+    NDContainer,
+    decode_nonfinite_float_strings,
+)
 from fnnx.handlers._base import BaseHandler, BaseHandlerConfig
 from fnnx.handlers._common import unpack_model
+from fnnx.ops._base import BaseOp
 from fnnx.registry import Registry
-from fnnx.variants.pyfunc import PyFuncVariant
 from fnnx.validators.model_schema import (
     validate_manifest,
     validate_op_instances,
     validate_variant,
 )
-from fnnx.ops._base import BaseOp
 from fnnx.variants._base import BaseVariant
-
+from fnnx.variants.pipeline import Pipeline, validate_pipeline
+from fnnx.variants.pyfunc import PyFuncVariant
 
 _VARIANT_CLASSES = {"pipeline": Pipeline, "pyfunc": PyFuncVariant}
 
@@ -33,7 +37,7 @@ class LocalHandlerConfig(BaseHandlerConfig):
     n_workers: int = 1
     n_workers_node: int = 1
     auto_cleanup: bool = True
-    extra_ops: dict[str, Type[BaseOp]] | None = None
+    extra_ops: dict[str, type[BaseOp]] | None = None
 
 
 class LocalHandler(BaseHandler):
@@ -60,21 +64,23 @@ class LocalHandler(BaseHandler):
             # passing model_path and not self.model_path to avoid reference on self
             atexit.register(lambda: _cleanup(model_path))
 
-        self.manifest = self._load_json_config("manifest.json")
+        self.manifest = load_effective_manifest(self.model_path)
         validate_manifest(self.manifest)
-        self.input_specs = {spec["name"]: spec for spec in self.manifest["inputs"]}
-        self.output_specs = {spec["name"]: spec for spec in self.manifest["outputs"]}
+        self.input_specs = io_specs_by_name(self.manifest["inputs"], "input")
+        self.output_specs = io_specs_by_name(self.manifest["outputs"], "output")
 
         self.ops = self._load_json_config("ops.json")
         validate_op_instances(self.ops)
 
         self.variant_config = self._load_json_config("variant_config.json")
         validate_variant(self.manifest["variant"], self.variant_config)
+        if self.manifest["variant"] == "pipeline":
+            validate_pipeline(self.manifest, self.ops, self.variant_config)
 
         external_dtypes = self._load_json_config("dtypes.json")
         self.dtypes_manager = DtypesManager(external_dtypes, BUILTINS)
 
-        self.variant = self.manifest.get("variant")
+        self.variant = self.manifest["variant"]
 
         registry = Registry()
         registry.register_default_ops()
@@ -101,20 +107,27 @@ class LocalHandler(BaseHandler):
 
     def _load_json_config(self, filename: str):
         """Load and return JSON config from model path."""
-        with open(pjoin(self.model_path, filename), "r") as f:
-            return json.load(f)
+        return load_root_json(self.model_path, filename)
 
-    def _as_np(self, data, spec):
+    def _as_np(self, data: Any, spec: dict[str, Any]) -> Any:
         if np is None:
             raise RuntimeError("You must have numpy installed to use Array dtype")
         dtype = spec["dtype"][6:-1]
         if dtype == "string":
             return np.asarray(data).astype(np.str_)
+        if dtype in {"float32", "float64"}:
+            if isinstance(data, np.ndarray):
+                shape = data.shape
+                data = decode_nonfinite_float_strings(data.tolist())
+                return np.asarray(data).reshape(shape).astype(dtype)
+            data = decode_nonfinite_float_strings(data)
         return np.asarray(data).astype(dtype)
 
     def _prepare_ndjson_input(self, input, spec):
         if "NDContainer[" in spec["dtype"]:
             if not isinstance(input, NDContainer):
+                if spec["dtype"] == "NDContainer[float]":
+                    input = decode_nonfinite_float_strings(input)
                 return NDContainer(
                     input,
                     dtype=spec["dtype"],
@@ -145,17 +158,24 @@ class LocalHandler(BaseHandler):
                 raise ValueError(f"Unknown input type {spec['content_type']}")
         return prepared_inputs
 
-    def _prepare_outputs(self, outputs: dict) -> dict:
-        return {k: outputs[k] for k in self.output_specs.keys()}
+    def _prepare_outputs(self, outputs: dict[str, Any]) -> dict[str, Any]:
+        for name in self.output_specs:
+            if name not in outputs:
+                raise ValueError(f"Missing declared output `{name}`")
+        return {name: outputs[name] for name in self.output_specs}
 
-    def compute(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    def compute(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         res = self.vrt.compute(
             self._prepare_inputs(inputs),
             dynamic_attributes=dynamic_attributes,
         )
         return self._prepare_outputs(res)
 
-    async def compute_async(self, inputs: dict, dynamic_attributes: dict) -> dict:
+    async def compute_async(
+        self, inputs: dict[str, Any], dynamic_attributes: dict[str, str]
+    ) -> dict[str, Any]:
         res = await self.vrt.compute_async(
             self._prepare_inputs(inputs),
             dynamic_attributes=dynamic_attributes,

@@ -168,3 +168,6 @@ mlflow.db
 spec/schemas/*.json
 !spec/schemas/combined.json
 src/python/tmp.py
+
+# Scratch area at the repo root (local artifacts, throwaway scripts)
+/tmp/

@@ -1,20 +1,24 @@
+import os
 import platform
 import subprocess
-import os
+from typing import Any
 
-def select_pip_deps(raw_deps: list[dict], accelerator: str) -> list[dict]:
+
+def select_pip_deps(
+    raw_deps: list[dict[str, Any]], accelerator: str | None
+) -> list[dict[str, Any]]:
     sys_os = platform.system().lower()  # 'linux', 'darwin', 'windows'
     machine = platform.machine().lower()  # 'x86_64', 'arm64', ...
-    accel = (accelerator or "cpu").lower()
+    accel = ("cpu" if accelerator is None else accelerator).lower()
 
-    out: list[dict] = []
+    out: list[dict[str, Any]] = []
     for d in raw_deps:
         cond = d.get("condition") or {}
         ok = True
         if cond.get("os"):
             ok = ok and sys_os in [o.lower() for o in cond["os"]]
         if cond.get("platform"):
-            ok = ok and any(p.lower() in machine for p in cond["platform"])
+            ok = ok and machine in [p.lower() for p in cond["platform"]]
         if cond.get("accelerator"):
             ok = ok and accel in [a.lower() for a in cond["accelerator"]]
         if ok:
@@ -42,7 +46,7 @@ def run_cmd(
         return ""
 
 
-def which(exe: str):
+def which(exe: str) -> str | None:
     for path in os.environ.get("PATH", "").split(os.pathsep):
         cand = os.path.join(path, exe)
         if os.path.isfile(cand) and os.access(cand, os.X_OK):

@@ -1,8 +1,8 @@
 # The `pipeline` variant
 
-| Key | Added in | Updated in | Classification | Operations | Schema |
-| --- | --- | --- | --- | --- | --- |
-| `pipeline` | 0.0.4 | 0.1.0 | Strong portability, Strong execution durability | ALL | [`variant_pipeline.json`](../schemas/variant_pipeline.json) |
+| Key | Added in | Updated in | Classification | Operations | Content types | Schema |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pipeline` | 0.1.0 | 0.1.0 | Strong portability, Strong execution durability | ALL | `NDJSON` | [`variant_pipeline.json`](../schemas/variant_pipeline.json) |
 
 `pipeline` is a directed acyclic graph of first-party operations. The variant defines composition, not computation. It defines how values flow from one operation to the next, how the graph binds to the manifest's inputs and outputs, and how dynamic attributes reach the operations. Each node delegates to an op instance declared in `ops.json`. The operation named by that instance carries its own execution contract.
 
