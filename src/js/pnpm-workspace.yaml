@@ -1,2 +1,8 @@
 packages:
   - 'packages/*'
+
+
+ignoredBuiltDependencies:
+  - esbuild
+  - onnxruntime-node
+  - protobufjs
